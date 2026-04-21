@@ -3,13 +3,13 @@
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)
 ![FreeRTOS](https://img.shields.io/badge/RTOS-FreeRTOS-orange.svg)
 ![Next.js](https://img.shields.io/badge/Web-Next.js-black.svg)
-![STM32](https://img.shields.io/badge/Hardware-STM32F407-green.svg)
+![STM32](https://img.shields.io/badge/Hardware-STM32F407-DISC1-green.svg)
 
 **Aegis Command & Control** is a full-stack embedded systems project designed to simulate a deterministic, real-time radar state machine with a modern web-based command and control interface.
 
 This project demonstrates the integration of hard real-time C++ embedded systems with modern web technologies via a low-latency WebSocket gateway, strictly adhering to defense-industry standards, SOLID principles, and zero-dynamic-memory allocation constraints on the edge node.
 
-## 🏗️ System Architecture
+## System Architecture
 
 The system is composed of three isolated but integrated layers:
 
