@@ -20,3 +20,12 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+
+#claude code
+.claude/
+
+#latex
+*.aux
+*.log
+*.out
+*.toc
