@@ -1,0 +1,20 @@
+\section{Glossary}
+
+\begin{description}
+    \item[AC2 Frame] Edge Node ile Gateway arasındaki UART üzerinde taşınan, IRS [R4]'te tanımlı byte-level mesaj yapısı.
+    \item[Audit Log] Güvenlik-ilişkili tüm olayları (kimlik doğrulama, komut red, kural ihlali) append-only olarak saklayan NDJSON dosya.
+    \item[Byte Stuffing] Frame içinde kontrol byte'larının (sync, escape) kullanıcı verisinde geçmesini engellemek için escape prefix'i ile yer değiştirme tekniği (HDLC tarzı).
+    \item[Fail-Safe Mode] Sistemin kritik bir arıza tespit ettiğinde girdiği, tüm çıkışların güvenli duruma alındığı kısıtlı çalışma modu (bkz. SAF-02).
+    \item[Heartbeat] Bağlantının canlılığını doğrulamak için periyodik (1Hz) gönderilen boş-payload'lu telemetry frame'i.
+    \item[Meyer's Singleton] C++'da bir statik yerel değişken üzerinden lazy-init tek örnek sağlayan pattern; thread-safe olarak C++11'den itibaren garanti edilmiştir.
+    \item[Monotonic Sequence Number] Her komut frame'inde geriye gitmeyen artan sayı; replay koruması için kullanılır (SR-02).
+    \item[Panic Block] HardFault sırasında SRAM2'de ayrılmış, post-mortem register dump tutulan bellek bölgesi.
+    \item[Reproducible Build] Aynı kaynak + aynı toolchain ile birebir aynı binary üretmeyi garanti eden build yapısı (DEP-01).
+    \item[Secure Boot] Bootloader'ın uygulama firmware'ini bir imza ile doğrulayarak çalıştırmadan önce bütünlük kanıtı talep ettiği mekanizma (SR-07).
+    \item[Simulation Engine] Fiziksel radar donanımı yerine, deterministik PRNG temelli hedef tespit/kayıp olayları üreten modül (ARCH-04).
+    \item[State Pattern (Static variant)] Klasik State Pattern'in \texttt{new} kullanmadan, \texttt{constexpr}-singleton veya \texttt{std::variant} ile implement edildiği versiyon.
+    \item[Telemetry Frame] Edge Node'dan Gateway'e yayınlanan durum bilgisi taşıyan AC2 frame'i.
+    \item[Token Bucket] Belirli bir rate ve burst kapasitesine göre istek akışını sınırlandıran rate-limit algoritması (SR-05).
+    \item[WCET] Bir kod parçasının teorik olarak alabileceği en uzun yürütme süresi; deterministik sistemlerde tasarım bütçesinin temel parametresi.
+    \item[Wrapper/Adapter Pattern] Düşük seviyeli C API'lerini (HAL gibi) bir C++ sınıfının arkasına saklayıp interface üzerinden ulaşılabilir kılan pattern.
+\end{description}

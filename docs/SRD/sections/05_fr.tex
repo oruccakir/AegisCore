@@ -1,0 +1,93 @@
+\section{Functional Requirements (FR)}
+
+\subsection{Embedded Core (STM32) Requirements}
+
+\paragraph{FR-01: State Management.}
+Sistem üç ana durumu (IDLE, SEARCH, TRACK) yönetir ve her durum değişimini Gateway'e \textbf{en geç 20ms içinde} raporlar. Durum tanımları ve LED davranışı:
+\begin{itemize}
+    \item \textbf{IDLE:} Sistem beklemededir; yeşil (PD12) ve kırmızı (PD14) LED'ler kapalıdır. Dışarıdan \texttt{CMD\_SET\_STATE(SEARCH)} komutu veya User Button short-press bekler.
+    \item \textbf{SEARCH:} Sistem arama modundadır. Yeşil LED 500ms periyotla $\pm$10ms toleransla yanıp söner (%50 duty). Simülasyon motoru bir hedef olayı ürettiğinde TRACK'a geçer.
+    \item \textbf{TRACK:} Sistem kilitlenmiştir. Kırmızı LED sürekli yanar. Simülasyon motoru hedef kaybı ürettiğinde SEARCH'e, \texttt{CMD\_SET\_STATE(IDLE)} komutu veya User Button long-press'te IDLE'a döner.
+\end{itemize}
+
+\paragraph{FR-01a: State Transition Matrix.}
+İzin verilen geçişler aşağıda sıralanmıştır. Bu tabloda yer almayan her geçiş talebi reddedilir ve \texttt{CMD\_NACK(ERR\_INVALID\_TRANSITION)} ile cevaplanır:
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{From} & \textbf{To} & \textbf{Trigger} \\
+\hline
+IDLE   & SEARCH & \texttt{CMD\_SET\_STATE(SEARCH)} veya button short-press \\
+SEARCH & TRACK  & Simulation event: target detected \\
+SEARCH & IDLE   & \texttt{CMD\_SET\_STATE(IDLE)} veya button long-press \\
+TRACK  & SEARCH & Simulation event: target lost \\
+TRACK  & IDLE   & \texttt{CMD\_SET\_STATE(IDLE)} veya button long-press \\
+TRACK  & TRACK  & \texttt{CMD\_MANUAL\_LOCK} (idempotent, yeniden kilitleme) \\
+SEARCH & TRACK  & \texttt{CMD\_MANUAL\_LOCK} (operatör zorlamalı) \\
+*      & FAIL-SAFE & SAF triggers (bkz. 08\_safety) \\
+\hline
+\end{tabular}
+\end{center}
+
+\paragraph{FR-02: Hardware Interrupts \& Button Semantics.}
+User Button (PA0) EXTI0 ile donanımsal kesme üretir. Tek buton iki davranışı ayırır:
+\begin{itemize}
+    \item \textbf{Short-press} ($<$ 500ms basılı): IDLE$\leftrightarrow$SEARCH toggle. TRACK'tayken etkisizdir.
+    \item \textbf{Long-press} ($\geq$ 500ms basılı): Her state'ten IDLE'a acil düşüş (operator stop).
+\end{itemize}
+Debounce 20ms hardware + software. ISR sadece timestamp kaydeder ve queue'ya event atar; karar StateMachineTask'te verilir.
+
+\paragraph{FR-06: Fault Reporting (new).}
+Edge Node bir iç hata (watchdog pre-warning, CRC failure count > eşik, stack high-water ihlali vb.) algıladığında bir \texttt{CMD\_FAULT\_REPORT} frame'i gönderir. Payload bir \texttt{FaultCode} enum ve opsiyonel 16-bit context taşır.
+
+\subsection{Web Interface (Next.js) Requirements}
+
+\paragraph{FR-03: Live Dashboard Visualization.}
+\begin{itemize}
+    \item Arayüz, sistemin mevcut durumunu (State) \textbf{end-to-end 50ms'nin altında} bir medyan gecikmeyle günceller. 99th-percentile hedef $\leq$ 150ms.
+    \item Latency alt bütçe (end-to-end = UART + Gateway + WS + React render):
+    \begin{center}
+    \begin{tabular}{|l|r|}
+    \hline
+    \textbf{Hop} & \textbf{Budget} \\
+    \hline
+    Edge state change $\rightarrow$ UART TX & 5 ms \\
+    UART transit (115200 8N1, $\leq$16B) & 2 ms \\
+    Gateway parse + WS publish & 8 ms \\
+    WS network (localhost) & 2 ms \\
+    React state update + re-render & 20 ms \\
+    Browser compositor & 13 ms \\
+    \hline
+    \textbf{Total} & \textbf{50 ms} \\
+    \hline
+    \end{tabular}
+    \end{center}
+    \item SEARCH modunda dairesel radar tarama animasyonu ($\geq$ 30 FPS), TRACK modunda hedef kilitlenme görselleri gösterilir.
+\end{itemize}
+
+\paragraph{FR-04: Command \& Control Execution.}
+Arayüzdeki kontroller aracılığıyla sisteme şu komutlar gönderilir:
+\begin{itemize}
+    \item \texttt{Sistemi Başlat} $\rightarrow$ \texttt{CMD\_SET\_STATE(SEARCH)}.
+    \item \texttt{Sistemi Durdur} $\rightarrow$ \texttt{CMD\_SET\_STATE(IDLE)}.
+    \item \texttt{Manuel Hedef Kilitle} $\rightarrow$ \texttt{CMD\_MANUAL\_LOCK}, sadece SEARCH veya TRACK state'lerinde kabul edilir. IDLE'dan çağrılırsa UI butonu disabled olur ve \texttt{ERR\_INVALID\_TRANSITION} döner.
+\end{itemize}
+Her komut, UI'dan gönderilmeden önce bir optimistic-lock tokenı ile imzalanır (bkz. SR-01).
+
+\paragraph{FR-05: Event Logging Terminal.}
+\begin{itemize}
+    \item Tüm durum değişiklikleri ve kritik uyarılar, arayüzdeki bir terminal bileşeninde zaman damgasıyla (ISO-8601, milisaniye hassasiyeti) listelenir.
+    \item Severity seviyeleri: \texttt{DEBUG, INFO, WARN, ERROR, FAULT}. Renk kodlaması: WARN sarı, ERROR turuncu, FAULT kırmızı.
+    \item Tarayıcıda son 500 entry bellekte tutulur (ring buffer). Gateway tarafında log persistency NDJSON dosyasına yapılır (rotation: 10MB $\times$ 5 dosya).
+    \item Filter: severity + text substring.
+\end{itemize}
+
+\paragraph{FR-07: Connection Status Indicator (new).}
+UI sağ üst köşede bir "bağlantı durumu" göstergesi bulunur. Üç durumu vardır:
+\begin{itemize}
+    \item \textbf{Connected} (yeşil): WebSocket açık ve son heartbeat $<$ 2sn.
+    \item \textbf{Degraded} (sarı): WS açık ama heartbeat 2-5sn arası.
+    \item \textbf{Disconnected} (kırmızı): WS kapalı veya heartbeat $>$ 5sn.
+\end{itemize}
+Disconnected durumda komut butonları disabled yapılır.

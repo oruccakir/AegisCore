@@ -6,12 +6,16 @@
 \usepackage{hyperref}
 \usepackage[shortlabels]{enumitem}
 \usepackage{xcolor}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
 
 % Link ve PDF ayarları
 \hypersetup{
     colorlinks=true,
     linkcolor=blue,
-    filecolor=magenta,      
+    filecolor=magenta,
     urlcolor=cyan,
     pdftitle={System Requirements Document},
     pdfpagemode=FullScreen,
@@ -25,7 +29,7 @@
     \LARGE \textbf{Aegis Command \& Control}\\
     \vspace{2cm}
 }
-\author{\Large \textbf{Sürüm:} 1.0.0}
+\author{\Large \textbf{Sürüm:} 2.0.0}
 \date{\vspace{1cm} \Large \today}
 
 \begin{document}
@@ -37,8 +41,26 @@
 \begin{center}
     \Large \textbf{Target Hardware:} STM32F407G-DISC1 \\
     \vspace{0.5cm}
-    \Large \textbf{Software Stack:} C++20, FreeRTOS, Node.js, Next.js
+    \Large \textbf{Software Stack:} C++20, FreeRTOS, Node.js, Next.js \\
+    \vspace{0.5cm}
+    \normalsize \textbf{Classification:} Unclassified — Internal Use \\
+    \vspace{0.2cm}
+    \normalsize \textbf{Document ID:} AC2-SRD-001
 \end{center}
+
+\newpage
+
+% Revision History
+\section*{Revision History}
+\begin{tabularx}{\textwidth}{|c|c|X|c|}
+\hline
+\textbf{Rev} & \textbf{Date} & \textbf{Change Summary} & \textbf{Author} \\
+\hline
+1.0.0 & 2026-04-21 & Initial draft (FR, ARCH, CPR only). & O. Çakır \\
+\hline
+2.0.0 & \today & Defense-baseline expansion: NFR, Security, Safety, Verification, Traceability sections added. State-machine, protocol and architecture inconsistencies resolved. IRS spun out into separate document. & O. Çakır \\
+\hline
+\end{tabularx}
 
 \newpage
 \pagenumbering{roman}
@@ -46,101 +68,19 @@
 \newpage
 \pagenumbering{arabic}
 
-\section{Introduction}
+\input{sections/01_scope.tex}
+\input{sections/02_references.tex}
+\input{sections/03_conops.tex}
+\input{sections/04_arch.tex}
+\input{sections/05_fr.tex}
+\input{sections/06_nfr.tex}
+\input{sections/07_security.tex}
+\input{sections/08_safety.tex}
+\input{sections/09_verification.tex}
+\input{sections/10_traceability.tex}
 
-\subsection{Purpose}
-Bu doküman, STM32 mikrodenetleyicisi ve web tabanlı bir komuta kontrol arayüzünden oluşan "Aegis Command \& Control" sisteminin donanım, yazılım ve haberleşme gereksinimlerini tanımlar.
-
-\subsection{System Overview}
-AC2 Sistemi, üç ana katmandan oluşan bir "Full-Stack Embedded" mimarisidir:
-\begin{enumerate}[1.]
-    \item \textbf{Edge Node (STM32):} Deterministik durum makinesini (State Machine) işleten, sensör/donanım etkileşimini sağlayan gerçek zamanlı çekirdek.
-    \item \textbf{Gateway Bridge:} Seri port (UART) üzerinden gelen paketleri çözümleyip WebSockets (TCP/IP) üzerinden arayüze aktaran ara katman.
-    \item \textbf{Command Control Interface (Next.js):} Kullanıcının sistemi uzaktan izlediği ve kontrol ettiği, yüksek tepkime hızına sahip modern web arayüzü.
-\end{enumerate}
-
-\section{System Architecture \& Constraints}
-
-\noindent \textbf{ARCH-01: SOLID \& Design Patterns}
-\begin{itemize}
-    \item Gömülü sistem yazılımı; Dependency Inversion (DIP) ve Single Responsibility (SRP) prensiplerine kesin olarak uyacaktır.
-    \item Durum yönetimi için \textit{State Pattern}, kesme yönetimi için \textit{Observer Pattern}, donanım soyutlaması için \textit{Wrapper/Adapter Pattern} kullanılacaktır.
-\end{itemize}
-
-\vspace{0.5cm}
-\noindent \textbf{ARCH-02: Memory \& Resource Management}
-\begin{itemize}
-    \item STM32 üzerinde çalışma zamanında (runtime) dinamik bellek tahsisi (\texttt{new}, \texttt{malloc}) kesinlikle yapılmayacaktır. 
-    \item Tüm nesneler statik olarak tahsis edilecek, bellek sızıntısı ve fragmentasyon riskleri donanım seviyesinde engellenecektir.
-\end{itemize}
-
-\vspace{0.5cm}
-\noindent \textbf{ARCH-03: RTOS Integration}
-\begin{itemize}
-    \item Görevler (Tasks) arası iletişim, paylaşılan bellek yerine FreeRTOS Queue ve Semaphore yapıları kullanılarak Thread-Safe şekilde yapılacaktır.
-\end{itemize}
-
-\section{Functional Requirements (FR)}
-
-\subsection{Embedded Core (STM32) Requirements}
-
-\noindent \textbf{FR-01: State Management}\\
-Sistem üç ana durumu (IDLE, SEARCH, TRACK) yönetecek ve her durum değişimi Gateway'e anlık olarak raporlanacaktır.
-\begin{itemize}
-    \item \textbf{IDLE:} Sistem beklemededir, LED'ler kapalıdır. Dışarıdan "START" komutu bekler.
-    \item \textbf{SEARCH:} Sistem arama modundadır. Yeşil LED (PD12) 500ms periyotla yanıp söner. Bir hedef bulunduğunda TRACK moduna geçer.
-    \item \textbf{TRACK:} Sistem kilitlenmiştir. Kırmızı LED (PD14) sürekli yanar. Hedef kaybedilirse SEARCH moduna, "STOP" komutu gelirse IDLE moduna döner.
-\end{itemize}
-
-\vspace{0.5cm}
-\noindent \textbf{FR-02: Hardware Interrupts}
-\begin{itemize}
-    \item Kullanıcı butonu (User Button), sisteme donanımsal kesme (EXTI) üreterek manuel "START" ve "STOP" işlevlerini yerine getirecektir.
-\end{itemize}
-
-\subsection{Web Interface (Next.js) Requirements}
-
-\noindent \textbf{FR-03: Live Dashboard Visualization}
-\begin{itemize}
-    \item Arayüz, sistemin mevcut durumunu (State) 50ms'nin altında bir gecikmeyle (latency) güncelleyerek ekranda gösterecektir.
-    \item SEARCH modunda arayüzde dairesel bir radar tarama animasyonu çalışacak, TRACK modunda ise hedef kilitlenme görselleri aktifleşecektir.
-\end{itemize}
-
-\vspace{0.5cm}
-\noindent \textbf{FR-04: Command \& Control Execution}
-\begin{itemize}
-    \item Arayüz üzerinde bulunan kontroller aracılığıyla sisteme "Sistemi Başlat", "Sistemi Durdur" ve "Manuel Hedef Kilitle" komutları gönderilebilecektir.
-\end{itemize}
-
-\vspace{0.5cm}
-\noindent \textbf{FR-05: Event Logging Terminal}
-\begin{itemize}
-    \item Sistemden gelen tüm durum değişiklikleri ve kritik uyarılar, arayüzdeki bir terminal bileşeninde zaman damgasıyla (timestamp) listelenecektir.
-\end{itemize}
-
-\section{Communication \& Protocol Requirements (CPR)}
-
-\noindent \textbf{CPR-01: AC2 Telemetry Protocol}\\
-STM32 ve Gateway arasındaki UART haberleşmesi, veri bozulmalarını engellemek için özel bir çerçeve (Frame) formatında yapılacaktır.
-\begin{itemize}
-    \item \textbf{Format:} \texttt{[SYNC\_BYTE] [LENGTH] [COMMAND\_ID] [PAYLOAD] [CHECKSUM]}
-    \item \textbf{SYNC\_BYTE:} Paketin başlangıcını belirten sabit byte (Örn: \texttt{0xAA}).
-    \item \textbf{CHECKSUM:} Veri bütünlüğünü doğrulamak için XOR veya CRC-8 algoritması kullanılacaktır.
-\end{itemize}
-
-\vspace{0.5cm}
-\noindent \textbf{CPR-02: Command Registry}\\
-Desteklenen temel iletişim komutları şunlardır:
-\begin{itemize}
-    \item \texttt{CMD\_SET\_STATE (0x10)}: Arayüzden gömülü sisteme mod değiştirme emri.
-    \item \texttt{CMD\_REPORT\_STATE (0x20)}: Gömülü sistemden arayüze anlık durum bildirimi.
-    \item \texttt{CMD\_HEARTBEAT (0x99)}: Sistemin bağlantı kopmalarını tespit etmek için saniyede bir gönderdiği yaşam sinyali.
-\end{itemize}
-
-\vspace{0.5cm}
-\noindent \textbf{CPR-03: WebSocket Gateway}
-\begin{itemize}
-    \item Bridge yazılımı, UART üzerinden aldığı AC2 Telemetry paketlerini JSON formatına ayrıştıracak ve anında WebSocket (\texttt{socket.io} vb.) üzerinden Next.js arayüzüne yayınlayacaktır.
-\end{itemize}
+\appendix
+\input{appendices/acronyms.tex}
+\input{appendices/glossary.tex}
 
 \end{document}

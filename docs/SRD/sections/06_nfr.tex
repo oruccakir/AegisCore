@@ -1,0 +1,95 @@
+\section{Non-Functional Requirements (NFR)}
+
+\subsection{Performance}
+
+\paragraph{NFR-PERF-01: Worst-Case Execution Time (WCET).}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Code Unit} & \textbf{WCET} & \textbf{Verification} \\
+\hline
+UART RX ISR & $\leq$ 10 µs & Cycle counter + static analysis \\
+EXTI Button ISR & $\leq$ 5 µs & Cycle counter \\
+State transition (IDLE $\rightarrow$ SEARCH) & $\leq$ 2 ms & Oscilloscope + GPIO toggle \\
+AC2 frame parse (16 byte payload) & $\leq$ 200 µs & Unit test \\
+Telemetry frame build + CRC & $\leq$ 150 µs & Unit test \\
+\hline
+\end{tabularx}
+
+\paragraph{NFR-PERF-02: CPU Load.}
+Toplam CPU kullanımı normal çalışma altında \textbf{\% 60'ı geçmez}. Idle task en az \% 40 headroom sağlar. Ölçüm FreeRTOS \texttt{uxTaskGetSystemState()} ile yapılır, 1Hz periyotla telemetry frame içine eklenir.
+
+\paragraph{NFR-PERF-03: Memory Budget.}
+\begin{tabularx}{\textwidth}{|l|r|r|X|}
+\hline
+\textbf{Region} & \textbf{Max} & \textbf{Target} & \textbf{Notes} \\
+\hline
+Flash (.text + .rodata) & 256 KB & 150 KB & STM32F407G-DISC1: 1MB toplam \\
+RAM (.bss + .data)      & 64 KB  & 40 KB  & STM32F407G-DISC1: 128KB SRAM1 + 64KB SRAM2 \\
+FreeRTOS heap (static)  & 16 KB  & 12 KB  & \texttt{heap\_4} KAPATILACAK (tümü static) \\
+Task stacks (toplam)    & 8 KB   & 6.5 KB & Tablo ARCH-03'te \\
+Log ring buffer         & 4 KB   & 4 KB   & 256 entry $\times$ 16 byte \\
+\hline
+\end{tabularx}
+
+\paragraph{NFR-PERF-04: End-to-End Latency.}
+FR-03'te tanımlandığı üzere: medyan $\leq$ 50ms, p99 $\leq$ 150ms (operator button'dan UI state değişimine).
+
+\paragraph{NFR-PERF-05: Startup Time.}
+Power-on'dan IDLE state'e erişim $\leq$ 500ms. Gateway ready $\leq$ 2000ms.
+
+\paragraph{NFR-PERF-06: Throughput.}
+UART link 115200 8N1 baud'da, Edge Node sürdürülebilir $\geq$ 50 frame/sn TX yapabilir (ortalama 24 byte frame).
+
+\subsection{Reliability}
+
+\paragraph{NFR-REL-01: MTBF.}
+Edge Node firmware'inin ortalama yeniden başlatmasız çalışma süresi 168 saat (1 hafta) olarak hedeflenir. Bu, watchdog reset ve HardFault olmaksızın kontinü çalışma anlamındadır.
+
+\paragraph{NFR-REL-02: Availability.}
+Demo senaryosunda sistem %99.5 (günde 7 dk'dan az arıza) erişilebilirlik hedefler. Gateway/UI tarafındaki process yönetimi systemd restart ile sağlanır.
+
+\paragraph{NFR-REL-03: Data Integrity.}
+UART kanalında $\leq$ 1 saatlik continuous traffic altında undetected bit error olasılığı $\leq$ 10\textsuperscript{-9} olmalıdır. CRC-16-CCITT kullanımı bu hedefin karşılanmasını sağlar (bkz. IRS [R4]).
+
+\paragraph{NFR-REL-04: Graceful Degradation.}
+Gateway çökerse Edge Node bağımsız çalışmaya devam eder (OPERATIONAL mod korunur); UART üzerinden yeniden bağlandığında durum otomatik resync edilir.
+
+\subsection{Environmental}
+
+\paragraph{NFR-ENV-01: Operating Temperature.}
+0°C ile +55°C arası (lab / ofis ortamı). MIL-STD-810 kapsamı dışıdır.
+
+\paragraph{NFR-ENV-02: ESD Tolerance.}
+Kart üzeri standart ESD koruması (STM32F407G-DISC1 default). Üretim kapsamı dışıdır.
+
+\subsection{Usability}
+
+\paragraph{NFR-USE-01: Accessibility.}
+Web UI, WCAG 2.1 Level AA düzeyinde renk kontrastına uyar. Klavye navigasyonu tam desteklenir (tab/shift-tab + enter).
+
+\paragraph{NFR-USE-02: Responsiveness.}
+UI 1280x720'den 3840x2160'a kadar ekran boyutlarında kullanılabilir; mobile breakpoint opsiyoneldir (v2.x scope dışı).
+
+\paragraph{NFR-USE-03: Internationalization.}
+v2.0.0 için tek dil: Türkçe. İngilizce çeviri i18n yapısı hazırlanır ama translate edilmez.
+
+\subsection{Maintainability}
+
+\paragraph{NFR-MAINT-01: Code Quality Gates.}
+\begin{itemize}
+    \item Clang-Tidy warning count $=$ 0 (treat-as-error).
+    \item cppcheck high/medium severity $=$ 0.
+    \item Cyclomatic complexity per function $\leq$ 10.
+    \item Function length $\leq$ 75 satır.
+\end{itemize}
+
+\paragraph{NFR-MAINT-02: Documentation.}
+Her public interface Doxygen annotation'lara sahiptir. Tüm gereksinimler \texttt{10\_traceability.tex}'te izlenir.
+
+\subsection{Portability}
+
+\paragraph{NFR-PORT-01: Toolchain.}
+Kod arm-none-eabi-gcc 13+ ve GCC 12+ host derleyicilerinde derlenir (unit test'ler host'ta koşar). MSVC desteği kapsam dışı.
+
+\paragraph{NFR-PORT-02: Build System.}
+CMake $\geq$ 3.22; Ninja generator. Docker reproducible build image'ı sağlanır (bkz. DEP-01).

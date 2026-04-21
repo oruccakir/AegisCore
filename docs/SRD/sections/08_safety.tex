@@ -1,0 +1,75 @@
+\section{Safety Requirements (SAF)}
+
+AC2 bir demo sistemi olduğundan formel bir SIL (Safety Integrity Level) hedeflenmez. Ancak aşağıdaki kontroller, sistemin bilinen arıza modlarını deterministik ve güvenli şekilde ele almasını sağlar. İlgili tehlike analizi \texttt{docs/HAZOP/fmea.md} dosyasındadır.
+
+\subsection{SAF-01: Independent Watchdog (IWDG)}
+\begin{itemize}
+    \item IWDG, LSI clock'tan beslenir (prescaler 32, reload 1024) $\rightarrow$ $\approx$ 1024 ms timeout.
+    \item Sadece \texttt{StateMachineTask} watchdog'u besler; diğer task'lerin hata durumu beslenmeyi engellemez.
+    \item Beslenme başarısız $\rightarrow$ otomatik reset + boot-reason register'ı IWDG reset olarak işaretlenir + Gateway'e bir \texttt{CMD\_FAULT\_REPORT(RESET\_IWDG)} gönderilir.
+\end{itemize}
+WWDG yerine IWDG tercih edilir: LSI bağımsız saatli olduğundan sistem ana clock başarısızlığında da çalışır.
+
+\subsection{SAF-02: Fail-Safe State}
+Aşağıdaki tetikleyicilerin herhangi biri sistemi FAIL-SAFE moduna düşürür:
+\begin{itemize}
+    \item Hard Fault, Bus Fault, Usage Fault.
+    \item Stack overflow (FreeRTOS hook).
+    \item Heartbeat kaybı $\geq$ 3 saniye (bkz. SAF-04).
+    \item Ardışık CRC hata $\geq$ 10 frame.
+    \item Power supply voltage drop (BOR Level 2 trip).
+\end{itemize}
+FAIL-SAFE moddaki davranış: tüm LED'ler kapalı, komut girişleri disabled, sadece heartbeat ve fault report frame'leri TX edilir. Sadece donanım reset veya \texttt{CMD\_RESET\_ACK} ile OPERATIONAL'a dönülür.
+
+\subsection{SAF-03: Brown-Out Reset (BOR)}
+BOR Level 2 (2.7V) option byte'lardan aktif edilir. Bu, 3.3V rail'de gürültü/drop durumlarında deterministic reset sağlar.
+
+\subsection{SAF-04: Communication Loss Behavior}
+\begin{itemize}
+    \item Heartbeat periyodu 1000ms $\pm$ 50ms (Edge $\rightarrow$ Gateway yönü).
+    \item Edge Node bidirectional heartbeat bekler: Gateway'den 2 saniyeden uzun süre frame almazsa "link degraded" flag set edilir.
+    \item 3 ardışık heartbeat kaybı (3 saniye) $\rightarrow$ TRACK'tayken sistem IDLE'a otomatik düşer; SEARCH'tayken SEARCH korunur; hata telemetry'si üretilir.
+    \item 5 ardışık heartbeat kaybı (5 saniye) $\rightarrow$ FAIL-SAFE.
+\end{itemize}
+
+\subsection{SAF-05: Stack Overflow Detection}
+FreeRTOS \texttt{configCHECK\_FOR\_STACK\_OVERFLOW=2} set edilir. Overflow hook FAIL-SAFE'i tetikler ve hangi task'in overflow ettiğini diagnostic register'a yazar.
+
+\subsection{SAF-06: HardFault Post-Mortem}
+HardFault / MemManage / BusFault / UsageFault handler'ları:
+\begin{itemize}
+    \item PC, LR, PSP, MSP, fault status register'larını SRAM2'deki bir "panic block"a yazar.
+    \item Panic block reset'ten sonra geçici olarak korunur (SRAM2 self-refresh); bootloader bunu okuyup \texttt{CMD\_FAULT\_REPORT} olarak Gateway'e iletir.
+    \item Gateway bunu \texttt{logs/panic/} altında zaman damgalı dosyaya yazar.
+\end{itemize}
+
+\subsection{SAF-07: Power-On Self-Test (POST / BIT)}
+Boot sırasında, OPERATIONAL'a geçmeden önce:
+\begin{itemize}
+    \item \textbf{Flash CRC:} Uygulama .text + .rodata bölgesi üzerinden CRC-32; linker script bir \texttt{\_\_expected\_crc} değeri gömer. Mismatch $\rightarrow$ FAIL-SAFE.
+    \item \textbf{RAM pattern test:} İlk 1KB SRAM'e 0x55/0xAA pattern yazılıp okunur.
+    \item \textbf{Clock integrity:} HSE ready bit kontrol edilir; yok ise HSI fallback + flag.
+    \item \textbf{UART loopback (opsiyonel):} TX-RX kısa devre ile test (sadece test fixture konfigürasyonunda).
+    \item \textbf{LED test:} Yeşil $\rightarrow$ kırmızı $\rightarrow$ kapalı sekansı (operatör için görsel BIT).
+\end{itemize}
+Tüm sonuçlar boot banner telemetry frame'inde yayınlanır.
+
+\subsection{SAF-08: MPU Configuration}
+STM32F407 MPU (Memory Protection Unit) aşağıdaki bölgeleri korur:
+\begin{itemize}
+    \item \texttt{.text} bölgesi execute-only, readonly.
+    \item Stack bölgeleri non-executable.
+    \item Null pointer guard: 0x00000000-0x000000FF execute/read/write disabled.
+\end{itemize}
+MPU ihlalleri MemManage fault üretir $\rightarrow$ SAF-06 devreye girer.
+
+\subsection{SAF-09: Button Debounce \& Spurious Press}
+FR-02'deki buton için:
+\begin{itemize}
+    \item Hardware: 100nF kapasitör + 10k pull-up.
+    \item Software: 20ms debounce + pattern check (basılı kalma süresi ölçümü).
+    \item Spurious press detection: 50ms içinde $\geq$ 5 state değişimi $\rightarrow$ press ignored + WARN log.
+\end{itemize}
+
+\subsection{SAF-10: Safe Default Configuration}
+Güç geldiğinde varsayılan durum her zaman IDLE'dır. "Last state persistence" gibi özellikler yoktur — bu, yanlış bir state'te boot'u engeller.

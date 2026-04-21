@@ -29,3 +29,7 @@ TestResults.xml
 *.log
 *.out
 *.toc
+*.fls
+*.fdb_latexmk
+*.xdv
+*.synctex.gz

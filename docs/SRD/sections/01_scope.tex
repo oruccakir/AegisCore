@@ -1,0 +1,88 @@
+\section{Introduction \& Scope}
+
+\subsection{Purpose}
+Bu doküman, STM32 mikrodenetleyicisi ve web tabanlı bir komuta kontrol arayüzünden oluşan \textit{Aegis Command \& Control} (AC2) sisteminin donanım, yazılım, haberleşme, emniyet, güvenlik ve doğrulama gereksinimlerini tanımlar. Doküman IEEE/ISO/IEC 29148:2018 ve MIL-STD-498 DID-IPSC-81433A yapılarına referans alınarak hazırlanmıştır.
+
+\subsection{Scope}
+AC2 sistemi; bir gömülü çekirdek, bir köprü yazılımı ve bir web arayüzünden oluşan üç katmanlı bir \textbf{simülasyon tabanlı} radar komuta-kontrol platformudur. Sistem, gerçek bir radar donanımı içermez; hedef tespit olayları \textbf{deterministik bir simülasyon motoru} tarafından üretilir (bkz. FR-01a). Bu nedenle AC2 bir \textit{training/demonstration} sistemi olarak sınıflandırılır, operasyonel bir silah sistemi değildir.
+
+\subsection{System Overview}
+AC2 mimarisi üç ana katmandan oluşur:
+\begin{enumerate}[1.]
+    \item \textbf{Edge Node (STM32F407):} Deterministik durum makinesini işleten, hedef simülasyon motorunu çalıştıran, donanım kesmelerini işleyen gerçek zamanlı çekirdek. FreeRTOS üzerinde C++20 ile geliştirilir.
+    \item \textbf{Gateway Bridge (Node.js):} UART üzerinden gelen AC2 telemetri paketlerini çözümleyip WebSocket (TCP/IP) üzerinden arayüze aktaran, durum bilgisizlik (stateless) olarak tasarlanmış ara katman.
+    \item \textbf{Command Control Interface (Next.js 14):} Operatörün sistemi izlediği ve kontrol ettiği, sub-50ms UI gecikmesine sahip web arayüzü.
+\end{enumerate}
+
+\subsection{Context Diagram}
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+\textbf{Operator} & $\leftrightarrow$ & \textbf{Browser/Next.js} & $\leftrightarrow$ & \textbf{Gateway (Node.js)} \\
+\hline
+\end{tabular}
+
+\vspace{0.2cm}
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Gateway (Node.js)} & $\leftrightarrow$ UART 115200 8N1 $\leftrightarrow$ & \textbf{STM32 Edge Node} \\
+\hline
+\end{tabular}
+
+\vspace{0.2cm}
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{STM32 Edge Node} & $\leftrightarrow$ GPIO/EXTI $\leftrightarrow$ & \textbf{LEDs \& User Button} \\
+\hline
+\end{tabular}
+\end{center}
+
+Harici aktörler ve sınırlar:
+\begin{itemize}
+    \item \textbf{Operator:} İnsan kullanıcı; web arayüzünden komut verir ve durumu gözlemler.
+    \item \textbf{Browser:} Operator'un kullandığı modern web tarayıcısı (Chrome/Firefox, WebSocket ve WebGL destekli).
+    \item \textbf{Development Host:} Firmware'i ST-Link üzerinden flash'layan geliştirici bilgisayarı (dağıtım kapsamı dışı).
+    \item \textbf{Güç Kaynağı:} USB 5V (STM32F407G-DISC1 regülatörüyle 3.3V'a düşürülür).
+\end{itemize}
+
+\subsection{Stakeholders}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Role} & \textbf{Stakeholder} & \textbf{Concern} \\
+\hline
+Sponsor & Proje Sahibi & Teknik demonstrasyon, portfolyo değeri. \\
+\hline
+Developer & Embedded/Web Engineer & Kod kalitesi, test edilebilirlik, bakım. \\
+\hline
+Operator & End-User Demo Persona & UI tepkime hızı, net görselleştirme, hata geribildirimi. \\
+\hline
+QA & Verifier & Gereksinim izlenebilirliği, kabul kriterleri, coverage metrikleri. \\
+\hline
+Security Reviewer & Sec. Engineer & Kimlik doğrulama, şifreleme, replay koruması. \\
+\hline
+\end{tabularx}
+
+\subsection{Assumptions, Constraints, Dependencies}
+\paragraph{Assumptions (varsayımlar):}
+\begin{itemize}
+    \item Edge Node ile Gateway arasındaki UART bağlantısı fiziksel olarak güvenli bir ortamdadır (air-gapped lab).
+    \item Host makine bir CPython/Node.js 20 LTS runtime'ı çalıştırabilmektedir.
+    \item Operatörün tek eşzamanlı bağlantısı olacaktır (multi-client senaryo v2.x kapsamı dışıdır).
+\end{itemize}
+
+\paragraph{Constraints (kısıtlar):}
+\begin{itemize}
+    \item Hedef donanım STM32F407G-DISC1 geliştirme kartı (1MB Flash, 192KB RAM, 168MHz Cortex-M4F) ile sınırlıdır.
+    \item Edge Node'da dinamik bellek tahsisi kesinlikle yasaktır (bkz. ARCH-02).
+    \item STL'nin heap kullanan bileşenleri (\texttt{std::string}, \texttt{std::vector}, \texttt{std::function}) Edge Node'da yasaktır; ETL (Embedded Template Library) veya statik alternatifler kullanılır.
+    \item Proje açık kaynak toolchain'e bağımlıdır: \texttt{arm-none-eabi-gcc} $\geq$ 13, CMake $\geq$ 3.22.
+\end{itemize}
+
+\paragraph{Dependencies (bağımlılıklar):}
+\begin{itemize}
+    \item FreeRTOS 10.x kernel.
+    \item STM32CubeF4 HAL 1.28.x.
+    \item ETL 20.x (embedded template library).
+    \item Node.js 20 LTS, \texttt{serialport} 12.x, \texttt{ws} 8.x veya \texttt{socket.io} 4.x.
+    \item Next.js 14.x, React 18.x.
+\end{itemize}

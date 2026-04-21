@@ -1,0 +1,97 @@
+\section{Verification \& Deployment Requirements}
+
+\subsection{Verification Methods}
+Her gereksinim aşağıdaki yöntemlerden biri (veya fazlasıyla) doğrulanır:
+\begin{itemize}
+    \item \textbf{T — Test:} Otomatikleştirilmiş unit/integration/system test.
+    \item \textbf{A — Analysis:} Statik analiz, WCET hesabı, coverage raporu.
+    \item \textbf{I — Inspection:} Kod/doküman review.
+    \item \textbf{D — Demonstration:} HIL rig üzerinde canlı gösterim.
+\end{itemize}
+
+\subsection{VR-01: Unit Testing}
+\begin{itemize}
+    \item Edge Node logic kodu host üzerinde (\texttt{-DHOST\_BUILD}) GoogleTest ile test edilir.
+    \item HAL bağımlı kod mock üzerinden (FakeIt veya elle yazılmış mock) izole edilir.
+    \item Coverage hedefi: $\geq$ \%90 line, $\geq$ \%85 branch.
+    \item Coverage gcovr ile ölçülür, lcov HTML rapor CI artifact olarak yayınlanır.
+    \item Kapsam dışı: HAL wrapper'larının kendisi (bunlar sadece HIL'de doğrulanır).
+\end{itemize}
+
+\subsection{VR-02: Decision Coverage (MC/DC Lite)}
+Kritik state machine kararları için MC/DC coverage ölçülür. Hedef $\geq$ \%80 (DO-178C DAL-C level). FAIL-SAFE transition'ları ve tüm \texttt{switch(state)} dalları kapsama girer.
+
+\subsection{VR-03: Integration \& HIL Testing}
+\begin{itemize}
+    \item Gateway $\leftrightarrow$ Edge Node entegrasyonu için bir pytest-based harness (\texttt{tests/hil/}) kullanılır.
+    \item Test fixture ST-Link + pyserial + pytest-asyncio ile otomatize edilir.
+    \item Senaryo matrisi: boot, IDLE$\rightarrow$SEARCH$\rightarrow$TRACK, tüm FR ve SAF path'leri.
+    \item Heartbeat loss senaryosu programatik olarak serial line'ı kopartarak test edilir (fake-serial fixture).
+    \item Sonuçlar JUnit XML olarak yayınlanır.
+\end{itemize}
+
+\subsection{VR-04: Static Analysis}
+\begin{itemize}
+    \item MISRA C++ 2008 (cppcheck \texttt{--addon=misra}).
+    \item Clang-Tidy set: \texttt{cert-*, cppcoreguidelines-*, bugprone-*, performance-*, readability-*}.
+    \item cppcheck severity $\geq$ medium blocking.
+    \item CodeQL (opsiyonel) — GitHub Advanced Security tier'dan.
+    \item Her MISRA/AUTOSAR deviation \texttt{docs/deviations.md}'de gerekçelendirilir.
+\end{itemize}
+
+\subsection{VR-05: Fuzz Testing}
+\begin{itemize}
+    \item AC2 parser'ı host-side libFuzzer hedefi olarak derlenir.
+    \item CI'da 60 saniye smoke fuzz; haftalık overnight run 8 saat.
+    \item Crash, hang, sanitizer alarm (ASan/UBSan) bulgular bug olarak kabul edilir.
+\end{itemize}
+
+\subsection{VR-06: System Acceptance Tests}
+Her release öncesi "Acceptance Test Suite" (ATS) koşulur:
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\textbf{ATS-ID} & \textbf{Scenario} \\
+\hline
+ATS-01 & Cold boot $\rightarrow$ IDLE $\leq$ 500ms. \\
+ATS-02 & Button short-press 10 kez $\rightarrow$ hiçbir ghost press. \\
+ATS-03 & SEARCH modunda LED 500ms $\pm$10ms toleranslı. \\
+ATS-04 & UI komut latency p95 $\leq$ 50ms. \\
+ATS-05 & Serial cable unplug $\rightarrow$ 3s sonra UI "disconnected". \\
+ATS-06 & Invalid HMAC frame $\rightarrow$ drop + audit log entry. \\
+ATS-07 & 1 saat continuous $\rightarrow$ heap usage flat, no watchdog reset. \\
+\hline
+\end{tabularx}
+
+\subsection{VR-07: Traceability}
+\texttt{10\_traceability.tex} içindeki matris her requirement'ı en az bir verification method'a eşler. Bir requirement'ın coverage'ı yoksa release gate geçilmez.
+
+\subsection{DEP-01: Reproducible Build}
+\begin{itemize}
+    \item Toolchain sabit bir Docker image üzerinden sağlanır (\texttt{ghcr.io/.../ac2-builder:<git-sha>}).
+    \item Image digest build artifact'a gömülür (\texttt{BUILDINFO} sembolü).
+    \item CMake build \texttt{-DCMAKE\_BUILD\_TYPE=Release} ve \texttt{-ffile-prefix-map} ile path'ten bağımsız binary üretir.
+\end{itemize}
+
+\subsection{DEP-02: Versioning}
+\begin{itemize}
+    \item Firmware version semantic (\texttt{MAJOR.MINOR.PATCH}).
+    \item \texttt{CMD\_GET\_VERSION (0x01)} komutu version string + build date + git short sha döndürür.
+    \item Breaking protocol değişikliği $\rightarrow$ MAJOR artışı.
+\end{itemize}
+
+\subsection{DEP-03: Firmware Update}
+\begin{itemize}
+    \item v2.0.0: sadece ST-Link/DFU ile flash. Operatör bağımsız güncelleme yok.
+    \item v2.1.0 (roadmap): MCUboot + A/B bank + Ed25519 imza ile OTA.
+\end{itemize}
+
+\subsection{DEP-04: Release Checklist}
+Bir release "ready" kabul edilir ise:
+\begin{itemize}
+    \item Tüm CI job'ları yeşil.
+    \item ATS-01..07 passed.
+    \item SBOM eklenmiş.
+    \item Changelog güncel.
+    \item Traceability matrix coverage \%100.
+    \item Security review imzalı.
+\end{itemize}

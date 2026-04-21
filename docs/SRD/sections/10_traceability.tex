@@ -1,0 +1,132 @@
+\section{Traceability Matrix}
+
+Aşağıdaki matris her gereksinimi (a) kaynağa/parent gereksinime, (b) karşılayacak tasarım birimine ve (c) doğrulama yöntemine (T/A/I/D — bkz. VR tanımı) eşler.
+
+\subsection{Architecture Requirements}
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Req ID} & \textbf{Parent / Source} & \textbf{Design Element} & \textbf{V. Method} \\
+\hline
+ARCH-01 & STD-04, STD-05, [R7] & All application classes & I + A \\
+ARCH-02 & STD-04, MISRA M5-0-1 & Linker script, heap config & A + T \\
+ARCH-03 & FreeRTOS Reference & Task config table & I + T \\
+ARCH-04 & FR-01, M-01 fix & \texttt{SimulationEngine} class & T \\
+ARCH-05 & [R7] DIP & Directory layout, interfaces & I \\
+ARCH-06 & STD-04, STD-05 & CI static analysis job & A \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Functional Requirements}
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Req ID} & \textbf{Parent / Source} & \textbf{Design Element} & \textbf{V. Method} \\
+\hline
+FR-01   & User story "state mgmt" & \texttt{StateMachine} + state classes & T + D \\
+FR-01a  & FR-01, M-04 fix & State transition table in firmware & T \\
+FR-02   & Hardware concept & \texttt{ButtonHandler} + EXTI0 ISR & T + D \\
+FR-03   & UX target & React \texttt{RadarDashboard} component & T + D \\
+FR-04   & User story "C2" & \texttt{CommandPanel} + WS client & T + D \\
+FR-05   & Observability need & \texttt{EventTerminal} component & T \\
+FR-06   & SAF-02 support & \texttt{FaultReporter} service & T \\
+FR-07   & UX + SAF-04 & \texttt{ConnectionIndicator} component & T \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Non-Functional Requirements}
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Req ID} & \textbf{Parent / Source} & \textbf{Design Element} & \textbf{V. Method} \\
+\hline
+NFR-PERF-01 & WCET safety & Static timing analysis & A \\
+NFR-PERF-02 & Scheduler headroom & \texttt{uxTaskGetSystemState} hook & T \\
+NFR-PERF-03 & Memory budget & Linker map report & A \\
+NFR-PERF-04 & FR-03 latency budget & HIL latency harness & T \\
+NFR-PERF-05 & Boot UX & Boot profiling & T \\
+NFR-PERF-06 & UART throughput & Burst test & T \\
+NFR-REL-01  & MTBF target & 168h soak test & T \\
+NFR-REL-02  & Availability & Uptime monitor & T \\
+NFR-REL-03  & Data integrity & CRC math + fuzz & A + T \\
+NFR-REL-04  & Graceful degradation & Gateway kill-test & T \\
+NFR-ENV-01  & Operating env & Thermal lab check (opsiyonel) & D \\
+NFR-USE-01  & WCAG 2.1 AA & axe-core CI check & T \\
+NFR-USE-02  & Responsive grid & Playwright visual test & T \\
+NFR-MAINT-01 & Code quality gates & CI blocking jobs & A \\
+NFR-MAINT-02 & Doxygen & doxygen CI build & I \\
+NFR-PORT-01 & Toolchain baseline & CI matrix & T \\
+NFR-PORT-02 & Reproducible build & Docker build & T \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Security Requirements}
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Req ID} & \textbf{Parent / Source} & \textbf{Design Element} & \textbf{V. Method} \\
+\hline
+SR-01 & STD-08, CWE-306 & HMAC verifier in framer & T + A \\
+SR-02 & STD-08, CWE-294 & Monotonic seq check & T \\
+SR-03 & STD-10 ASVS 9.x & Next.js custom server + TLS & I + T \\
+SR-04 & STD-10 ASVS 3.x & JWT auth middleware & T \\
+SR-05 & STD-08 & Token bucket in StateMachine & T \\
+SR-06 & STD-08 & Audit logger in Gateway & I + T \\
+SR-07 & STD-09 & MCUboot (roadmap v2.1) & D (future) \\
+SR-08 & STD-10 ASVS 5.x & Zod schema + parser bounds & T \\
+SR-09 & STD-10 & CI audit job & A \\
+SR-10 & STD-10 ASVS 14.x & Next.js headers config & T \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Safety Requirements}
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Req ID} & \textbf{Parent / Source} & \textbf{Design Element} & \textbf{V. Method} \\
+\hline
+SAF-01 & HAZOP H1, H3 & IWDG configurator & T \\
+SAF-02 & HAZOP H2, H4, H7 & \texttt{FailSafeSupervisor} & T + D \\
+SAF-03 & HAZOP H5 & BOR option byte & A \\
+SAF-04 & HAZOP H6 & Heartbeat timeout logic & T \\
+SAF-05 & HAZOP H8 & FreeRTOS overflow hook & T \\
+SAF-06 & HAZOP H9 & Fault handlers + panic block & T \\
+SAF-07 & HAZOP H10 & BIT sequence in bootloader & T \\
+SAF-08 & HAZOP H11 & MPU configurator & T \\
+SAF-09 & HAZOP H12 & Debounce logic & T \\
+SAF-10 & Safe-by-default & Boot init sequence & I \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Verification \& Deployment Requirements}
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Req ID} & \textbf{Parent / Source} & \textbf{Design Element} & \textbf{V. Method} \\
+\hline
+VR-01 & STD-03 informational & \texttt{tests/unit/} + GoogleTest & A \\
+VR-02 & STD-03 DAL-C & MC/DC tooling & A \\
+VR-03 & System acceptance & \texttt{tests/hil/} pytest & T \\
+VR-04 & STD-04, STD-05 & CI static analysis & A \\
+VR-05 & Defensive coding & libFuzzer harness & T \\
+VR-06 & Release gating & ATS-01..07 & T + D \\
+VR-07 & [R6] V\&V plan & This matrix & I \\
+DEP-01 & Supply chain integrity & Builder Docker image & A \\
+DEP-02 & Maintainability & \texttt{CMD\_GET\_VERSION} handler & T \\
+DEP-03 & Operational deploy & MCUboot (v2.1) & D (future) \\
+DEP-04 & Release gate & Release checklist & I \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Coverage Summary}
+\begin{itemize}
+    \item Toplam gereksinim sayısı: \textbf{63}.
+    \item Doğrulama yöntemi atanmış: \textbf{63 / 63} (%100).
+    \item Gelecek iterasyona ertelenmiş (SR-07, DEP-03): 2 gereksinim; bunlar v2.1.0 gate'inde verify edilir.
+\end{itemize}

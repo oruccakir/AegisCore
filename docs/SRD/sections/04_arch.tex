@@ -1,0 +1,71 @@
+\section{System Architecture \& Constraints}
+
+\subsection{ARCH-01: Design Principles \& Patterns}
+Gömülü sistem yazılımı aşağıdaki prensiplere uyar:
+\begin{itemize}
+    \item \textbf{SOLID (tam set):} SRP, OCP, LSP, ISP ve DIP prensiplerinin beşi de zorunludur. Her sınıfın sorumluluğu net olarak \texttt{principles/SOLID\_PRINCIPLES.md}'de belgelenir.
+    \item \textbf{State Pattern (statik varyant):} Klasik \texttt{new ConcreteState()} kullanımı yasaktır. State nesneleri \texttt{constexpr}-singleton olarak \texttt{.bss}'te yer alır; alternatif olarak \texttt{std::variant<Idle, Search, Track>} + \texttt{std::visit} (C++20, heap'siz) kullanılır. Seçim SDD'de gerekçelendirilir.
+    \item \textbf{Observer Pattern:} Sadece \textit{RTOS-primitif} tabanlı olacaktır. ISR'ler virtual fonksiyon çağırmaz; \texttt{xQueueSendFromISR} veya \texttt{xSemaphoreGiveFromISR} ile sinyal verir. Application task'leri observer rolünde blok halinde beklerler.
+    \item \textbf{Wrapper/Adapter Pattern:} HAL fonksiyonları doğrudan application layer'dan çağrılamaz. Her HAL modülü bir C++ sınıfının private metodu içinde kapsüllenir ve bir interface (\texttt{ICommunication}, \texttt{IGpio}, \texttt{ITimer}) implement eder.
+\end{itemize}
+
+\subsection{ARCH-02: Memory \& Resource Management}
+\begin{itemize}
+    \item \textbf{Zero Dynamic Allocation:} Runtime'da \texttt{new}, \texttt{delete}, \texttt{malloc}, \texttt{free}, \texttt{aligned\_alloc}, \texttt{realloc} kesinlikle yasaktır. Linker script bu sembolleri \texttt{UNDEFINED} olarak işaretler; herhangi bir referans link-time hatası üretir.
+    \item \textbf{STL Kısıtlamaları:} Heap kullanan STL konteyner ve tipleri (\texttt{std::string}, \texttt{std::vector}, \texttt{std::unordered\_map}, \texttt{std::function}, \texttt{std::shared\_ptr}, \texttt{std::make\_unique}) Edge Node'da yasaktır. Yerine ETL (\texttt{etl::string}, \texttt{etl::vector}, \texttt{etl::delegate}) veya \texttt{std::array} kullanılır.
+    \item \textbf{Exception \& RTTI:} \texttt{-fno-exceptions -fno-rtti} compiler flag'leri zorunludur.
+    \item \textbf{Static Allocation:} FreeRTOS \texttt{configSUPPORT\_STATIC\_ALLOCATION=1} ve \texttt{configSUPPORT\_DYNAMIC\_ALLOCATION=0} olarak konfigüre edilir. Tüm task/queue/semaphore statik bellek ile oluşturulur.
+    \item \textbf{Memory Budget:} Bkz. NFR-PERF-03.
+\end{itemize}
+
+\subsection{ARCH-03: RTOS Integration}
+\begin{itemize}
+    \item Task'ler arası tüm iletişim FreeRTOS Queue, Stream Buffer, Message Buffer, Semaphore veya Event Group üzerinden yapılır. Paylaşılan global değişken kullanımı \textbf{yasaktır}; zorunlu hallerde \texttt{atomic} + volatile işaretleyici gerekçelendirilerek kullanılır.
+    \item Task önceliği tablosu ve stack boyutları sabittir:
+    \begin{center}
+    \begin{tabular}{|l|c|c|c|}
+    \hline
+    \textbf{Task} & \textbf{Priority} & \textbf{Stack (words)} & \textbf{Period/Trigger} \\
+    \hline
+    UartRxTask     & 5 (high)   & 512 & UART IDLE IRQ \\
+    StateMachineTask & 4        & 512 & Queue event \\
+    TelemetryTxTask & 3         & 256 & 100ms tick \\
+    HeartbeatTask  & 2          & 128 & 1000ms tick \\
+    IdleHook       & 0          & —   & idle \\
+    \hline
+    \end{tabular}
+    \end{center}
+    \item \texttt{configMAX\_PRIORITIES=8}, \texttt{configTICK\_RATE\_HZ=1000}.
+\end{itemize}
+
+\subsection{ARCH-04: Simulation Engine (new)}
+FR-01a'yı karşılamak üzere Edge Node içinde deterministik bir hedef simülasyon motoru bulunur:
+\begin{itemize}
+    \item \textbf{Event Generator:} PRNG (xorshift32) + sabit seed ile reproducible event stream üretir. Seed non-volatile option byte'tan okunur; 0 ise \texttt{HAL\_GetTick()} fallback'i kullanılır (non-reproducible flag set).
+    \item \textbf{Detection Probability:} SEARCH modunda her 100ms tick'te $p=0.02$ ile hedef olayı üretir (ortalama 5sn içinde bir hedef).
+    \item \textbf{Loss Probability:} TRACK modunda her 100ms tick'te $p=0.005$ ile hedef kaybı üretir (ortalama 20sn track).
+    \item Bu parametreler derleme zamanı sabitleridir; runtime değiştirilemez (operator'un simülasyonu manipüle etmesini önlemek için).
+\end{itemize}
+
+\subsection{ARCH-05: Layer Isolation}
+Kod organizasyonu katmanlıdır ve üst katman alt katmana sadece interface üzerinden bağlıdır:
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Layer} & \textbf{Responsibility} \\
+\hline
+Application   & StateMachine, Telemetry, Simulation \\
+Service       & Protocol (AC2 framer/parser), Logger \\
+HAL-Wrapper   & \texttt{IUart, IGpio, ITimer} C++ sınıfları \\
+HAL (ST-provided) & \texttt{stm32f4xx\_hal\_*.c} (touched only in wrapper) \\
+BSP           & SystemClock, Startup, FreeRTOS port \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{ARCH-06: Coding Standards}
+\begin{itemize}
+    \item MISRA C++ 2008 ve AUTOSAR C++14 (birleşik subset) uyulur. Çakışmada AUTOSAR üstün gelir.
+    \item Deviation'lar bir \texttt{deviation\_log.md} dosyasında gerekçelendirilir; onaysız deviation CI'da build'i kırar.
+    \item Clang-Tidy + cppcheck CI pipeline'ında blocking check olarak çalıştırılır.
+\end{itemize}

@@ -1,0 +1,73 @@
+\section{References \& Applicable Standards}
+
+\subsection{Applicable Standards}
+Aşağıdaki standartlar bu projeye \textbf{tailored} (seçmeli) olarak uygulanır. AC2 bir demonstrasyon sistemi olduğundan, tam sertifikasyon hedeflenmez; standartlar tasarım rehberi olarak referans alınır.
+
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{ID} & \textbf{Standart} & \textbf{Uygulama Kapsamı} \\
+\hline
+STD-01 & ISO/IEC/IEEE 29148:2018 & Requirements engineering (bu SRS'in yapısı). \\
+\hline
+STD-02 & MIL-STD-498 DID-IPSC-81433A & Software Requirements Specification yapısı (tailored). \\
+\hline
+STD-03 & DO-178C (informational) & Yazılım yaşam döngüsü referansı; DAL-D eşdeğeri hedeflenir (demo). \\
+\hline
+STD-04 & MISRA C++ 2008 & Edge Node C++ kodlama kuralları. \\
+\hline
+STD-05 & AUTOSAR C++14 Guidelines & MISRA C++ 2008 ile birlikte; çakışmada AUTOSAR üstün. \\
+\hline
+STD-06 & CERT C++ Secure Coding & Güvenlik odaklı kodlama kuralları. \\
+\hline
+STD-07 & IEC 61508-3 (informational) & Fonksiyonel emniyet referansı; formel SIL hedefi yoktur. \\
+\hline
+STD-08 & NIST SP 800-82 Rev. 3 & ICS güvenliği; komut kanalı sertleştirme. \\
+\hline
+STD-09 & FIPS 140-3 (informational) & Kriptografik modül referansı (HMAC-SHA-256). \\
+\hline
+STD-10 & OWASP ASVS 4.0 & Web arayüzü için uygulama güvenlik doğrulaması. \\
+\hline
+\end{tabularx}
+
+\subsection{Reference Documents}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\textbf{Ref} & \textbf{Description} \\
+\hline
+[R1] & STMicroelectronics, RM0090 Reference Manual (STM32F407 family). \\
+\hline
+[R2] & STMicroelectronics, UM1472 User Manual (STM32F407G-DISC1). \\
+\hline
+[R3] & FreeRTOS Reference Manual v10.6. \\
+\hline
+[R4] & AC2 Interface Requirements Specification (\texttt{docs/IRS/ac2-telemetry-irs.tex}). \\
+\hline
+[R5] & AC2 Hazard Log \& FMEA (\texttt{docs/HAZOP/fmea.md}). \\
+\hline
+[R6] & AC2 Verification \& Validation Plan (\texttt{docs/VnV/verification-plan.md}). \\
+\hline
+[R7] & AC2 Design Principles (\texttt{principles/*.md}). \\
+\hline
+[R8] & CRC Catalogue, Philip Koopman — CRC-16/CCITT-FALSE polinomu. \\
+\hline
+\end{tabularx}
+
+\subsection{Requirement Identifier Convention}
+Gereksinim ID'leri \texttt{<CATEGORY>-<NUMBER>} formatındadır.
+
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\textbf{Prefix} & \textbf{Category} \\
+\hline
+ARCH & Architecture \& Constraints \\
+FR   & Functional Requirement \\
+NFR  & Non-Functional Requirement \\
+SR   & Security Requirement \\
+SAF  & Safety Requirement \\
+VR   & Verification Requirement \\
+DEP  & Deployment / Build Requirement \\
+CPR  & Communication \& Protocol Requirement (IRS'de ayrıntı) \\
+\hline
+\end{tabularx}
+
+\noindent Her gereksinim; benzersiz ID, tanım, kaynak (parent), doğrulama yöntemi (Test/Analysis/Inspection/Demonstration — T/A/I/D) ile \texttt{10\_traceability.tex} içinde izlenir.

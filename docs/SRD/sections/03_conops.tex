@@ -1,0 +1,40 @@
+\section{Concept of Operations (CONOPS)}
+
+\subsection{Operational Scenario}
+AC2, bir masaüstü demo senaryosunda çalışır: geliştirici STM32F407G-DISC1 kartı USB ile bir host makineye bağlar. Gateway ve Next.js servisleri aynı host üzerinde döner. Operatör tarayıcıdan web arayüzüne erişip sistemi kontrol eder.
+
+\subsection{Operational Modes (System-Level)}
+Edge Node iki üst-düzey moda sahiptir:
+\begin{itemize}
+    \item \textbf{OPERATIONAL Mode:} Normal çalışma. FR-01'deki IDLE/SEARCH/TRACK alt durumları bu moda dahildir.
+    \item \textbf{FAIL-SAFE Mode:} Bir SAF gereksinimi ihlal edildiğinde (watchdog timeout, HardFault, heartbeat loss > eşik vb.) sistem bu moda geçer. Tüm çıkışlar (LED, aktüatör simülasyonları) güvenli duruma alınır, Gateway'e \texttt{CMD\_FAULT\_REPORT} gönderilir, sistem yeniden başlatılana kadar OPERATIONAL moda dönmez.
+\end{itemize}
+
+\subsection{Typical User Flow}
+\begin{enumerate}[1.]
+    \item Operatör tarayıcıda \texttt{https://localhost:8443} adresine bağlanır (wss://).
+    \item UI, Gateway'e WebSocket bağlantısı kurar; Gateway son bilinen state'i (IDLE varsayılanı) UI'ya bildirir.
+    \item Operatör "Sistemi Başlat" butonuna basar $\rightarrow$ \texttt{CMD\_SET\_STATE(SEARCH)} gönderilir.
+    \item Edge Node state geçişini doğrular, yeşil LED (PD12) 500ms periyotla yanıp sönmeye başlar, \texttt{CMD\_REPORT\_STATE(SEARCH)} Gateway'e iletilir, UI radar tarama animasyonu başlatır.
+    \item Simülasyon motoru bir hedef olayı üretir (bkz. FR-01a) $\rightarrow$ state TRACK'a geçer, kırmızı LED (PD14) yanar.
+    \item Operatör "Sistemi Durdur" butonuna basar $\rightarrow$ sistem IDLE'a döner.
+    \item Bağlantı kopuşu algılanırsa (SAF-04) sistem IDLE'a geçer, UI kırmızı bir banner gösterir.
+\end{enumerate}
+
+\subsection{Failure/Off-Nominal Scenarios}
+\begin{itemize}
+    \item \textbf{UART bit hatası:} Frame CRC doğrulaması başarısız olursa frame sessizce drop edilir, sayaç artırılır, 10 ardışık başarısızlıkta \texttt{CMD\_FAULT\_REPORT} gönderilir.
+    \item \textbf{Gateway çökmesi:} Edge Node heartbeat time-out'unu algılar, OPERATIONAL mod korunur ancak UI bağlantısız gösterilir. Gateway restart sonrası son state otomatik resync edilir.
+    \item \textbf{Operatör bağlantı kaybı (tarayıcı kapatma):} Gateway aktif komut göndermeyi durdurur; Edge Node davranışı etkilenmez.
+    \item \textbf{Yetkisiz komut:} Geçersiz HMAC ile gelen frame drop edilir, güvenlik olayı Gateway audit log'una yazılır (SR-06).
+\end{itemize}
+
+\subsection{Out of Scope (v2.0.0)}
+Aşağıdakiler bu sürümün kapsamı dışındadır:
+\begin{itemize}
+    \item Gerçek radar RF donanımı entegrasyonu.
+    \item Çoklu eşzamanlı operatör oturumları.
+    \item OTA firmware güncellemesi (bkz. DEP-03 — gelecek iterasyon).
+    \item Cross-site multi-node dağıtımı.
+    \item TEMPEST / MIL-STD-461 EMI sertifikasyonu.
+\end{itemize}

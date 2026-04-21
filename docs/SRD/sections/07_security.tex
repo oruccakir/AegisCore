@@ -1,0 +1,81 @@
+\section{Security Requirements (SR)}
+
+AC2 demo bir sistem olmasına rağmen, savunma tarzı komuta-kontrol mimarisinin gerekliliklerini göstermek için aşağıdaki güvenlik kontrolleri uygulanır. Tehdit modeli: (T1) UART kanalına fiziksel erişim, (T2) yerel ağda pasif/aktif MITM, (T3) tarayıcı tabanlı XSS/CSRF.
+
+\subsection{SR-01: Command Authentication}
+\texttt{CMD\_SET\_STATE}, \texttt{CMD\_MANUAL\_LOCK} gibi durum değiştirici her komut, HMAC-SHA-256 ile imzalanır.
+\begin{itemize}
+    \item Pre-shared key (PSK) 32 byte, STM32 option-byte bölgesinde saklanır; Gateway bunu bir environment variable'dan okur (\texttt{AC2\_PSK}).
+    \item HMAC, frame'in ilk 12 byte'ının (sync hariç) üzerinden hesaplanır; trunc-64 olarak payload sonuna eklenir.
+    \item Doğrulama başarısız $\rightarrow$ frame drop + \texttt{ERR\_AUTH\_FAIL} counter artırılır + FR-06 fault report.
+\end{itemize}
+\noindent Telemetry frame'leri (yönü Edge$\rightarrow$Host) imzalanmaz (integrity için CRC yeterli); komut yönü imzalanır.
+
+\subsection{SR-02: Replay Protection}
+Her komut frame'i monotonic 32-bit sequence number taşır. Edge Node'da son görülen \texttt{seq} saklanır; gelen \texttt{seq} $\leq$ son seen ise frame reddedilir (replay). Bu mekanizma reboot sonrası sıfırlanır; yeniden bağlantıda Gateway \texttt{CMD\_NONCE\_REQUEST} ile taze bir başlangıç değeri alır.
+
+\subsection{SR-03: Transport Encryption (Gateway $\leftrightarrow$ UI)}
+UI ile Gateway arası haberleşme \texttt{wss://} (TLS 1.3) üzerinden yapılır.
+\begin{itemize}
+    \item Self-signed sertifika (dev ortamı) veya mkcert tabanlı lokal CA; production için Let's Encrypt.
+    \item Cipher suite: TLS\_AES\_256\_GCM\_SHA384, TLS\_CHACHA20\_POLY1305\_SHA256.
+    \item HSTS header zorunlu (\texttt{max-age=31536000}).
+\end{itemize}
+
+\subsection{SR-04: WebSocket Authentication}
+UI WebSocket handshake'inde bir bearer token taşır (\texttt{Sec-WebSocket-Protocol: bearer.<JWT>}). JWT HS256 ile imzalanır; 30 dakika TTL.
+\begin{itemize}
+    \item Login endpoint'i (\texttt{POST /auth/login}) argon2id ile hash'lenmiş şifre doğrulaması yapar. Sadece tek bir demo kullanıcı vardır (\texttt{operator}).
+    \item Rate limit: 5 başarısız login/dakika $\rightarrow$ 15 dakika lockout.
+\end{itemize}
+
+\subsection{SR-05: Rate Limiting}
+Edge Node'da komut başına token-bucket rate limiter uygulanır:
+\begin{itemize}
+    \item \texttt{CMD\_SET\_STATE}: 5 req/sn, burst 10.
+    \item \texttt{CMD\_MANUAL\_LOCK}: 2 req/sn, burst 3.
+    \item Aşım $\rightarrow$ \texttt{ERR\_RATE\_LIMITED}.
+\end{itemize}
+Gateway tarafında ayrıca per-IP ve per-JWT-sub rate limiting bulunur (10 req/sn).
+
+\subsection{SR-06: Audit Logging}
+Gateway her güvenlik olayını (auth success/fail, komut kabul/red, HMAC fail, rate limit) NDJSON formatında bir audit log'a yazar:
+\begin{itemize}
+    \item Dosya: \texttt{logs/audit-YYYY-MM-DD.ndjson}.
+    \item Rotation: gün bazlı, gzip compression, 30 gün retention.
+    \item Her entry: \texttt{ts, src\_ip, sub, event, outcome, detail}.
+    \item Log kayıtları append-only sisteme benzetilir (chmod 0444 günlük rotation sonrası).
+\end{itemize}
+
+\subsection{SR-07: Secure Boot (Advisory)}
+\textbf{Önerilen} (v2.0.0 kapsamı dışı olabilir):
+\begin{itemize}
+    \item STM32 RDP Level 2 etkinleştirilir $\rightarrow$ debug arayüzü kalıcı kapatılır.
+    \item Firmware Ed25519 imzası; bootloader (MCUboot veya custom) imzayı doğrular.
+    \item Anti-rollback counter ile downgrade engellenir.
+\end{itemize}
+Bu özellik bir \textbf{roadmap item}'dır ve v2.1.0'da implement edilecektir.
+
+\subsection{SR-08: Input Validation}
+\begin{itemize}
+    \item Tüm UART parser'ı bounded (max 64 byte frame); LENGTH $>$ 60 payload olan frame'ler drop edilir.
+    \item Gateway WebSocket mesajlarını bir Zod schema ile doğrular; şema dışı mesaj drop edilir + audit log.
+    \item UI'da kullanıcı girdisi (manuel lock koordinat girişi vb. opsiyonel) HTML escape + XSS filter uygular.
+\end{itemize}
+
+\subsection{SR-09: Dependency Hygiene}
+\begin{itemize}
+    \item Her CI run'unda \texttt{npm audit --audit-level=high} blocking check.
+    \item Embedded tarafında SBOM (CycloneDX) üretilir ve release artifact olarak saklanır.
+    \item Dependabot/Renovate otomatik PR'larla güncel tutulur.
+\end{itemize}
+
+\subsection{SR-10: Web Security Headers}
+UI Next.js config'inde aşağıdaki header'lar zorunludur:
+\begin{itemize}
+    \item \texttt{Content-Security-Policy: default-src 'self'; connect-src 'self' wss:; img-src 'self' data:;}
+    \item \texttt{X-Frame-Options: DENY}
+    \item \texttt{X-Content-Type-Options: nosniff}
+    \item \texttt{Referrer-Policy: strict-origin-when-cross-origin}
+    \item \texttt{Permissions-Policy: camera=(), microphone=(), geolocation=()}
+\end{itemize}

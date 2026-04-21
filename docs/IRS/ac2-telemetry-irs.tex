@@ -1,0 +1,239 @@
+\documentclass[11pt, a4paper]{article}
+\usepackage{fontspec}
+\usepackage[turkish]{babel}
+\setmainfont{Latin Modern Roman}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage[shortlabels]{enumitem}
+\usepackage{xcolor}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{listings}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    frame=single,
+    breaklines=true,
+    columns=fullflexible,
+}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=cyan,
+    pdftitle={AC2 Interface Requirements Specification},
+}
+
+\title{\Huge \textbf{Interface Requirements Specification}\\
+       \LARGE \textbf{AC2 Telemetry Protocol}}
+\author{\Large \textbf{Sürüm:} 2.0.0 \hfill \textbf{Doc ID:} AC2-IRS-001}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+\subsection{Purpose}
+Bu IRS, STM32 Edge Node ile Gateway Bridge arasındaki seri haberleşme arayüzünü (UART) ve Gateway ile Web UI arasındaki WebSocket arayüzünü byte-level netlikte tanımlar. Doküman, AC2-SRD-001 [R4]'ün CPR bölümünü yerine alır ve genişletir.
+
+\subsection{Interface Overview}
+\begin{itemize}
+    \item \textbf{I/F-A:} STM32 Edge Node <--> Gateway (UART, 115200 8N1, AC2 framed binary).
+    \item \textbf{I/F-B:} Gateway <--> Web UI (WebSocket Secure, JSON messages).
+\end{itemize}
+
+\section{Physical Layer (I/F-A)}
+
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\textbf{Parameter} & \textbf{Value} \\
+\hline
+Signal Levels & 3.3V CMOS (STM32) / TTL (USB-UART adapter) \\
+Baud Rate & 115200 \\
+Data Bits & 8 \\
+Parity & None \\
+Stop Bits & 1 \\
+Flow Control & None (RTS/CTS kapalı) \\
+Endianness & Little-endian (wire) \\
+Max Frame Size & 64 byte \\
+Idle Detection & UART IDLE IRQ (DMA boundary) \\
+\hline
+\end{tabularx}
+
+\section{AC2 Frame Format (I/F-A)}
+
+\subsection{Frame Structure}
+\begin{lstlisting}
++---------+---------+----------+----------+---------+---------+----------+---------+
+| SYNC    | VERSION | SEQ_NUM  | LENGTH   | CMD_ID  | PAYLOAD | HMAC-8   | CRC-16  |
+| 1 byte  | 1 byte  | 4 bytes  | 1 byte   | 1 byte  | 0-48 B  | 8 bytes  | 2 bytes |
++---------+---------+----------+----------+---------+---------+----------+---------+
+  0xAA      0x02      LE u32     N         (Table)   variable  (trunc)    CRC-16-CCITT
+\end{lstlisting}
+
+\subsection{Field Semantics}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Field} & \textbf{Size} & \textbf{Description} \\
+\hline
+SYNC    & 1 B & Sabit \texttt{0xAA}. Senkronizasyon başlangıcı. \\
+VERSION & 1 B & Protocol sürümü. v2.0.0 için \texttt{0x02}. \\
+SEQ\_NUM & 4 B LE & Monotonic artan frame numarası. Replay koruması (SR-02). \\
+LENGTH  & 1 B & PAYLOAD uzunluğu (0..48). HMAC ve CRC bu sayıya dahil değildir. \\
+CMD\_ID & 1 B & Komut/olay ID (bkz. 4.). \\
+PAYLOAD & N B & Komuta özgü binary data. Endian: LE. \\
+HMAC-8  & 8 B & HMAC-SHA-256'nın ilk 8 byte'ı. \texttt{CMD\_ID + PAYLOAD} üzerinden; komut yönünde zorunlu, telemetry yönünde tüm sıfır (ignore). \\
+CRC-16  & 2 B LE & CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflect, xorout 0x0000). SYNC dahil tüm byte'lar üzerinden. \\
+\hline
+\end{tabularx}
+
+\subsection{Byte Stuffing / Escaping}
+Payload içinde \texttt{0xAA} byte'ı geçebilir (binary data). Parser'ın SYNC arayarak resync olmasını engellemek için \textbf{length-prefixed framing} yaklaşımı kullanılır: SYNC'i gören alıcı, hiç escaping yapmaksızın \texttt{VERSION+SEQ+LENGTH} header'ını okur ve frame boyunu deterministik hesaplar. Eğer CRC fail ise tek byte ilerleyerek yeniden SYNC aramaya başlar.
+
+\subsection{Maximum Frame Computation}
+\texttt{1 + 1 + 4 + 1 + 1 + 48 + 8 + 2 = 66 byte}. Pratik limit 64 byte payload $\leq$ 48 B ile korunur. Daha büyük veri için fragmentation protokolü (v3.0 roadmap) gerekir.
+
+\section{Command Registry}
+
+\begin{longtable}{|l|l|l|l|}
+\hline
+\textbf{CMD\_ID} & \textbf{Name} & \textbf{Direction} & \textbf{Payload} \\
+\hline
+\endhead
+0x01 & CMD\_GET\_VERSION      & Host -> Edge & — \\
+0x02 & CMD\_VERSION\_REPORT   & Edge -> Host & \texttt{u8 maj, u8 min, u8 patch, u8[8] git\_sha, u32 build\_ts} \\
+0x10 & CMD\_SET\_STATE        & Host -> Edge & \texttt{u8 target\_state} (0=IDLE, 1=SEARCH, 2=TRACK) \\
+0x11 & CMD\_MANUAL\_LOCK      & Host -> Edge & — (state SEARCH/TRACK'tayken idempotent) \\
+0x12 & CMD\_RESET\_ACK        & Host -> Edge & — (FAIL-SAFE'ten çıkış için) \\
+0x20 & CMD\_REPORT\_STATE     & Edge -> Host & \texttt{u8 state, u8 prev\_state, u32 uptime\_ms} \\
+0x21 & CMD\_TELEMETRY\_TICK   & Edge -> Host & \texttt{u8 state, u16 cpu\_load\_x10, u16 free\_stack\_min\_words, u8 hb\_miss\_count} \\
+0x30 & CMD\_FAULT\_REPORT     & Edge -> Host & \texttt{u8 fault\_code, u16 ctx, u32 reset\_reason\_bits} \\
+0x31 & CMD\_AUDIT\_EVENT      & Edge -> Host & \texttt{u8 event\_code, u16 count} \\
+0x80 & CMD\_ACK               & Edge -> Host & \texttt{u32 echoed\_seq} \\
+0x81 & CMD\_NACK              & Edge -> Host & \texttt{u32 echoed\_seq, u8 err\_code} \\
+0x99 & CMD\_HEARTBEAT         & Bidirectional & \texttt{u32 uptime\_ms} (TX), \texttt{u32 host\_ts} (RX) \\
+\hline
+\end{longtable}
+
+\subsection{Error Codes (CMD\_NACK.err\_code)}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Code} & \textbf{Name} & \textbf{Description} \\
+\hline
+0x01 & ERR\_INVALID\_CMD        & Bilinmeyen CMD\_ID. \\
+0x02 & ERR\_INVALID\_PAYLOAD    & Payload uzunluğu veya içeriği geçersiz. \\
+0x03 & ERR\_INVALID\_TRANSITION & State transition tablosunda yok. \\
+0x04 & ERR\_AUTH\_FAIL          & HMAC doğrulaması başarısız. \\
+0x05 & ERR\_REPLAY              & SEQ\_NUM $\leq$ son görülen. \\
+0x06 & ERR\_RATE\_LIMITED       & Token bucket dolu. \\
+0x07 & ERR\_FAIL\_SAFE\_LOCK    & Sistem FAIL-SAFE modunda; komut reddedildi. \\
+0x08 & ERR\_BUSY                & Geçici doluluk; sonra tekrar dene. \\
+\hline
+\end{tabularx}
+
+\section{Timing Requirements}
+
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Parameter} & \textbf{Value} & \textbf{Notes} \\
+\hline
+Heartbeat period (Edge $\to$ Host) & 1000 ms $\pm$ 50 ms & SAF-04 \\
+Heartbeat timeout (Host$\to$Edge loss) & 3 s & Degraded trigger \\
+FAIL-SAFE trigger & 5 s & SAF-04 \\
+Telemetry tick period & 100 ms & Throughput baseline \\
+Max ACK latency (Edge response to command) & 100 ms & \\
+\hline
+\end{tabularx}
+
+\section{WebSocket Interface (I/F-B)}
+
+\subsection{Endpoint}
+\begin{itemize}
+    \item URL: \texttt{wss://<host>:8443/ws}
+    \item Subprotocol: \texttt{ac2.v2}
+    \item Auth: \texttt{Sec-WebSocket-Protocol: bearer.<JWT>, ac2.v2}
+\end{itemize}
+
+\subsection{Message Envelope}
+Tüm mesajlar JSON'dır ve şu envelope'u taşır:
+\begin{lstlisting}
+{
+  "v":    2,
+  "type": "<event|command|ack|error>",
+  "ts":   "2026-04-21T18:57:23.412Z",
+  "seq":  12345,
+  "data": { /* type-specific */ }
+}
+\end{lstlisting}
+
+\subsection{Event Types (Gateway -> UI)}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\textbf{type} & \textbf{data schema} \\
+\hline
+\texttt{state}      & \{ state, prev\_state, uptime\_ms \} \\
+\texttt{telemetry}  & \{ state, cpu\_load, free\_stack, hb\_miss \} \\
+\texttt{fault}      & \{ code, ctx, reset\_reason, severity \} \\
+\texttt{audit}      & \{ event\_code, count \} \\
+\texttt{connection} & \{ status: "connected"|"degraded"|"disconnected" \} \\
+\hline
+\end{tabularx}
+
+\subsection{Command Types (UI -> Gateway)}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\textbf{type} & \textbf{data schema} \\
+\hline
+\texttt{set\_state}   & \{ target: "IDLE"|"SEARCH"|"TRACK" \} \\
+\texttt{manual\_lock} & \{\} \\
+\texttt{reset\_ack}   & \{\} \\
+\texttt{get\_version} & \{\} \\
+\hline
+\end{tabularx}
+Her komut Gateway tarafından bir \texttt{ack} veya \texttt{error} ile cevaplanır (echoed \texttt{seq}).
+
+\subsection{Validation}
+Gateway tüm incoming mesajları Zod schema'larına göre doğrular. Şema dışı mesaj drop edilir ve \texttt{audit} event'i yayılır (SR-08).
+
+\section{Interface Versioning}
+\begin{itemize}
+    \item \texttt{VERSION} byte'ı MAJOR değişiklikte artar. MINOR eklemeler geriye dönük uyumludur.
+    \item Handshake: Gateway bağlandığında \texttt{CMD\_GET\_VERSION} ile edge firmware sürümünü öğrenir, uyumsuzluğu UI'ya \texttt{fault} event'i olarak bildirir.
+\end{itemize}
+
+\section{Test Vectors}
+\subsection{Example: CMD\_SET\_STATE(SEARCH)}
+\begin{lstlisting}
+Direction: Host -> Edge
+Seq: 0x00000042
+PSK:  (32-byte demo key, see tests/fixtures)
+
+Plaintext body (cmd + payload):
+  10 01
+
+HMAC-SHA-256 over body (trunc 8):
+  A7 3F 91 22 4B 88 0E 1C
+
+Frame bytes:
+  AA 02 42 00 00 00 02 10 01 A7 3F 91 22 4B 88 0E 1C <CRC_LO> <CRC_HI>
+
+CRC-16-CCITT-FALSE over SYNC..HMAC = 0x5F A3 (example)
+Final bytes:
+  AA 02 42 00 00 00 02 10 01 A7 3F 91 22 4B 88 0E 1C A3 5F
+\end{lstlisting}
+
+\subsection{Example: CMD\_REPORT\_STATE (SEARCH)}
+\begin{lstlisting}
+Direction: Edge -> Host
+Seq: 0x00000101
+HMAC: all zeros (telemetry direction)
+
+Frame:
+  AA 02 01 01 00 00 06 20 01 00 F0 1A 00 00 00 00 00 00 00 00 00 <CRC_LO> <CRC_HI>
+   SYN VER  <-- SEQ -->  LEN CMD <-- payload(6) -->   <-- HMAC(8 zero) -->  CRC16
+\end{lstlisting}
+
+\end{document}
