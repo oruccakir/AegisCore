@@ -33,3 +33,6 @@ TestResults.xml
 *.fdb_latexmk
 *.xdv
 *.synctex.gz
+
+#build
+build/
