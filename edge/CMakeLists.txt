@@ -23,6 +23,8 @@ set(CUBE_DIR        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/STM32CubeF4)
 set(CMSIS_DEVICE_DIR ${CUBE_DIR}/Drivers/CMSIS/Device/ST/STM32F4xx)
 set(CMSIS_CORE_DIR   ${CUBE_DIR}/Drivers/CMSIS/Include)
 set(HAL_DIR          ${CUBE_DIR}/Drivers/STM32F4xx_HAL_Driver)
+set(FREERTOS_DIR     ${CUBE_DIR}/Middlewares/Third_Party/FreeRTOS/Source)
+set(FREERTOS_PORT_DIR ${FREERTOS_DIR}/portable/GCC/ARM_CM4F)
 
 # ---------------------------------------------------------------------------
 # Subset of HAL sources needed for Phase 1a (blink). Add more as phases grow.
@@ -40,6 +42,28 @@ set(HAL_SOURCES
 )
 
 # ---------------------------------------------------------------------------
+# FreeRTOS kernel subset for the Phase 2 state core.
+# ---------------------------------------------------------------------------
+set(FREERTOS_SOURCES
+    ${FREERTOS_DIR}/list.c
+    ${FREERTOS_DIR}/queue.c
+    ${FREERTOS_DIR}/tasks.c
+    ${FREERTOS_PORT_DIR}/port.c
+)
+
+# ---------------------------------------------------------------------------
+# First-party application sources.
+# ---------------------------------------------------------------------------
+set(APP_SOURCES
+    app/button_classifier.cpp
+    app/freertos_hooks.cpp
+    app/main.cpp
+    app/platform_io.cpp
+    app/simulation_engine.cpp
+    app/state_machine.cpp
+)
+
+# ---------------------------------------------------------------------------
 # Firmware executable.
 # ---------------------------------------------------------------------------
 set(ELF_TARGET aegiscore-edge.elf)
@@ -48,14 +72,18 @@ add_executable(${ELF_TARGET}
     startup/startup_stm32f407xx.s
     bsp/system_stm32f4xx.c
     bsp/stm32f4xx_it.c
-    app/main.cpp
+    ${APP_SOURCES}
     ${HAL_SOURCES}
+    ${FREERTOS_SOURCES}
 )
 
 target_include_directories(${ELF_TARGET} PRIVATE
+    app
     bsp                 # stm32f4xx_hal_conf.h lives here
     ${CMSIS_DEVICE_DIR}/Include
     ${CMSIS_CORE_DIR}
+    ${FREERTOS_DIR}/include
+    ${FREERTOS_PORT_DIR}
     ${HAL_DIR}/Inc
 )
 
@@ -89,7 +117,12 @@ target_compile_options(${ELF_TARGET} PRIVATE $<$<CONFIG:Release>:-Os -g>)
 
 # Treat only our own sources as warnings-as-errors — vendor HAL may warn.
 set_source_files_properties(
+    app/button_classifier.cpp
+    app/freertos_hooks.cpp
     app/main.cpp
+    app/platform_io.cpp
+    app/simulation_engine.cpp
+    app/state_machine.cpp
     bsp/stm32f4xx_it.c
     PROPERTIES COMPILE_OPTIONS "-Werror"
 )

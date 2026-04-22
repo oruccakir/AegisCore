@@ -1,121 +1,152 @@
-/*
- * AegisCore Edge Node — Phase 1a: bare-metal LED blink.
- *
- * Target : STM32F407G-DISC1 (STM32F407VGTx, Cortex-M4F @ 168 MHz)
- * Output : Green LED on PD12 toggles every 500 ms.
- *
- * This is the smallest runnable firmware that exercises:
- *   - HAL initialization
- *   - Clock tree configuration (HSE -> PLL -> 168 MHz SYSCLK)
- *   - GPIO driver
- *   - SysTick-based HAL_Delay
- *
- * No RTOS, no state machine, no UART yet — those arrive in later phases.
- */
+#include <array>
 
+#include "FreeRTOS.h"
+#include "queue.h"
+#include "task.h"
+#include "button_classifier.hpp"
+#include "platform_io.hpp"
+#include "simulation_engine.hpp"
+#include "state_machine.hpp"
 #include "stm32f4xx_hal.h"
 
 namespace {
 
-constexpr uint32_t kBlinkPeriodMs = 500U;
-constexpr uint16_t kLedGreenPin   = GPIO_PIN_12;  /* STM32F407G-DISC1: PD12 */
-GPIO_TypeDef* const kLedGreenPort = GPIOD;
+using aegis::edge::ButtonClassifier;
+using aegis::edge::RawButtonEdge;
+using aegis::edge::SimulationEngine;
+using aegis::edge::StateMachine;
 
-void SystemClock_Config();
-void GpioInit();
-[[noreturn]] void ErrorHandler();
+constexpr std::uint32_t kAppTaskPriority = 4U;
+constexpr std::uint32_t kAppTaskStackWords = 512U;
+constexpr std::uint32_t kButtonQueueLength = 8U;
+constexpr std::uint32_t kSimulationSeed = 0x12345678U;
+constexpr TickType_t kSimulationPeriodTicks = pdMS_TO_TICKS(100U);
 
-} // namespace
+StaticTask_t gStateMachineTaskControlBlock;
+StackType_t gStateMachineTaskStack[kAppTaskStackWords];
+StaticQueue_t gButtonQueueControlBlock;
+std::array<RawButtonEdge, kButtonQueueLength> gButtonQueueStorage = {};
 
-extern "C" int main()
+QueueHandle_t gButtonQueue = nullptr;
+
+void ApplyCurrentOutputs(const StateMachine& state_machine)
 {
-    /* Reset all peripherals, initialize Flash prefetch, configure SysTick. */
-    HAL_Init();
+    aegis::edge::ApplyLedOutputs(
+        state_machine.GetLedOutputs(aegis::edge::MillisecondsSinceBoot()));
+}
 
-    /* Crank the clocks to 168 MHz. */
-    SystemClock_Config();
+void DispatchButtonEvents(StateMachine& state_machine,
+                          ButtonClassifier& classifier)
+{
+    RawButtonEdge edge = {};
 
-    /* Bring up PD12 as push-pull output. */
-    GpioInit();
-
-    while (true)
+    while (xQueueReceive(gButtonQueue, &edge, 0U) == pdPASS)
     {
-        HAL_GPIO_TogglePin(kLedGreenPort, kLedGreenPin);
-        HAL_Delay(kBlinkPeriodMs);
+        const auto event = classifier.OnEdge(edge);
+        if (event.has_value())
+        {
+            (void)state_machine.Dispatch(*event);
+        }
     }
 }
 
-namespace {
-
-/**
- * Configure the system clock to 168 MHz using the 8 MHz HSE on the DISC1 board.
- *
- * Clock tree:
- *   HSE (8 MHz)  -> PLLM=8  -> 1 MHz VCO input
- *                -> PLLN=336-> 336 MHz VCO
- *                -> PLLP=2  -> 168 MHz SYSCLK
- *                -> PLLQ=7  -> 48 MHz  (USB/SDIO/RNG)
- *
- * AHB=168, APB1=42 (max), APB2=84 (max). Flash latency 5 WS at 168 MHz / 3.3 V.
- */
-void SystemClock_Config()
+void RunSimulationStep(StateMachine& state_machine,
+                       SimulationEngine& simulation_engine,
+                       const std::uint32_t timestamp_ms)
 {
-    RCC_OscInitTypeDef  osc  = {};
-    RCC_ClkInitTypeDef  clk  = {};
-
-    /* Voltage scaling 1 required for 168 MHz. */
-    __HAL_RCC_PWR_CLK_ENABLE();
-    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-
-    osc.OscillatorType       = RCC_OSCILLATORTYPE_HSE;
-    osc.HSEState             = RCC_HSE_ON;
-    osc.PLL.PLLState         = RCC_PLL_ON;
-    osc.PLL.PLLSource        = RCC_PLLSOURCE_HSE;
-    osc.PLL.PLLM             = 8;
-    osc.PLL.PLLN             = 336;
-    osc.PLL.PLLP             = RCC_PLLP_DIV2;
-    osc.PLL.PLLQ             = 7;
-
-    if (HAL_RCC_OscConfig(&osc) != HAL_OK) { ErrorHandler(); }
-
-    clk.ClockType      = RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK
-                       | RCC_CLOCKTYPE_PCLK1  | RCC_CLOCKTYPE_PCLK2;
-    clk.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
-    clk.AHBCLKDivider  = RCC_SYSCLK_DIV1;   /* 168 MHz */
-    clk.APB1CLKDivider = RCC_HCLK_DIV4;     /*  42 MHz (max) */
-    clk.APB2CLKDivider = RCC_HCLK_DIV2;     /*  84 MHz (max) */
-
-    if (HAL_RCC_ClockConfig(&clk, FLASH_LATENCY_5) != HAL_OK) { ErrorHandler(); }
+    const auto event = simulation_engine.Tick100ms(state_machine.state(), timestamp_ms);
+    if (event.has_value())
+    {
+        (void)state_machine.Dispatch(*event);
+    }
 }
 
-void GpioInit()
+void StateMachineTask(void* /*context*/)
 {
-    __HAL_RCC_GPIOD_CLK_ENABLE();
+    ButtonClassifier classifier;
+    StateMachine state_machine{aegis::edge::MillisecondsSinceBoot()};
+    SimulationEngine simulation_engine{kSimulationSeed};
 
-    GPIO_InitTypeDef pin = {};
-    pin.Pin   = kLedGreenPin;
-    pin.Mode  = GPIO_MODE_OUTPUT_PP;
-    pin.Pull  = GPIO_NOPULL;
-    pin.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(kLedGreenPort, &pin);
+    TickType_t next_simulation_tick = xTaskGetTickCount() + kSimulationPeriodTicks;
 
-    HAL_GPIO_WritePin(kLedGreenPort, kLedGreenPin, GPIO_PIN_RESET);
-}
+    ApplyCurrentOutputs(state_machine);
 
-[[noreturn]] void ErrorHandler()
-{
-    __disable_irq();
-    while (true) { }
+    for (;;)
+    {
+        const TickType_t now_ticks = xTaskGetTickCount();
+        const TickType_t wait_ticks =
+            (now_ticks < next_simulation_tick) ? (next_simulation_tick - now_ticks) : 0U;
+
+        RawButtonEdge edge = {};
+        if (xQueueReceive(gButtonQueue, &edge, wait_ticks) == pdPASS)
+        {
+            const auto event = classifier.OnEdge(edge);
+            if (event.has_value())
+            {
+                (void)state_machine.Dispatch(*event);
+            }
+
+            DispatchButtonEvents(state_machine, classifier);
+        }
+
+        TickType_t current_ticks = xTaskGetTickCount();
+        while (current_ticks >= next_simulation_tick)
+        {
+            const auto timestamp_ms =
+                static_cast<std::uint32_t>(next_simulation_tick * portTICK_PERIOD_MS);
+            RunSimulationStep(state_machine, simulation_engine, timestamp_ms);
+            next_simulation_tick += kSimulationPeriodTicks;
+            current_ticks = xTaskGetTickCount();
+        }
+
+        ApplyCurrentOutputs(state_machine);
+    }
 }
 
 } // namespace
 
-/* ------------------------------------------------------------------------- */
-/* HAL assertion hook — enabled by USE_FULL_ASSERT in stm32f4xx_hal_conf.h.  */
-/* ------------------------------------------------------------------------- */
-#ifdef USE_FULL_ASSERT
-extern "C" void assert_failed(uint8_t* /*file*/, uint32_t /*line*/)
+extern "C" void HAL_GPIO_EXTI_Callback(const uint16_t gpio_pin)
 {
-    while (true) { }
+    if ((gpio_pin != GPIO_PIN_0) || (gButtonQueue == nullptr))
+    {
+        return;
+    }
+
+    const RawButtonEdge edge = {
+        aegis::edge::ReadButtonPressed() ? aegis::edge::RawButtonEdgeType::Pressed
+                                         : aegis::edge::RawButtonEdgeType::Released,
+        aegis::edge::MillisecondsSinceBoot()};
+
+    BaseType_t higher_priority_task_woken = pdFALSE;
+    (void)xQueueSendFromISR(gButtonQueue, &edge, &higher_priority_task_woken);
+    portYIELD_FROM_ISR(higher_priority_task_woken);
 }
-#endif
+
+extern "C" int main()
+{
+    aegis::edge::InitializePlatform();
+
+    gButtonQueue = xQueueCreateStatic(
+        kButtonQueueLength,
+        sizeof(RawButtonEdge),
+        reinterpret_cast<std::uint8_t*>(gButtonQueueStorage.data()),
+        &gButtonQueueControlBlock);
+    configASSERT(gButtonQueue != nullptr);
+
+    TaskHandle_t const task_handle = xTaskCreateStatic(
+        StateMachineTask,
+        "StateCore",
+        kAppTaskStackWords,
+        nullptr,
+        kAppTaskPriority,
+        gStateMachineTaskStack,
+        &gStateMachineTaskControlBlock);
+    configASSERT(task_handle != nullptr);
+
+    vTaskStartScheduler();
+
+    __disable_irq();
+    while (true)
+    {
+    }
+}

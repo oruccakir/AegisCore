@@ -33,3 +33,6 @@ TestResults.xml
 
 #build
 build/
+
+#codex
+.codex
