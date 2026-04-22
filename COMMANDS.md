@@ -1,6 +1,10 @@
 # COMMANDS
 
 ```bash
+sudo apt update && sudo apt install -y gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build stlink-tools
+```
+
+```bash
 cmake -S edge -B edge/build -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake
 ```
 

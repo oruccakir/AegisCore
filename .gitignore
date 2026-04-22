@@ -21,9 +21,6 @@ rad.json
 #Test results file
 TestResults.xml
 
-#claude code
-.claude/
-
 #latex
 *.aux
 *.log
