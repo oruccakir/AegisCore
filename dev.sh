@@ -89,6 +89,7 @@ ok "Gateway started"
 
 # ── 7. Start UI ───────────────────────────────────────────────────────────
 log "Starting UI on http://localhost:3000 ..."
+pkill -f "next start" 2>/dev/null || true
 fuser -k 3000/tcp 2>/dev/null || true
 (cd ui && node node_modules/.bin/next start -p 3000 2>&1 \
     | sed "s/^/${CYAN}[ui]${RESET} /") &

@@ -37,7 +37,8 @@ const ERR_CODES: Record<number, string> = {
 
 const STATE_NAMES = ['IDLE', 'SEARCH', 'TRACK', 'FAIL_SAFE'];
 
-let logId = 0;
+let logId  = 0;
+let cmdSeq = 0;
 
 export function useAC2Socket(url: string) {
   const wsRef   = useRef<WebSocket | null>(null);
@@ -143,7 +144,8 @@ export function useAC2Socket(url: string) {
 
   const send = useCallback((cmd: OutCmd) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(cmd));
+      const envelope = { v: 2, type: cmd.type, ts: Date.now(), seq: cmdSeq++, data: cmd };
+      wsRef.current.send(JSON.stringify(envelope));
     }
   }, []);
 
