@@ -6,6 +6,10 @@ namespace aegis::edge {
 
 void MPU_Init() noexcept
 {
+    // VTOR must point to Flash before the null-guard region is active,
+    // otherwise prvPortStartFirstTask faults reading initial MSP from 0x00000000.
+    SCB->VTOR = FLASH_BASE;
+
     HAL_MPU_Disable();
 
     MPU_Region_InitTypeDef region = {};
