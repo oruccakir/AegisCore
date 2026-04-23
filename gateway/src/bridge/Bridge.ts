@@ -165,7 +165,7 @@ export class Bridge {
 
   private sendHeartbeat(): void {
     const payload = Buffer.alloc(4);
-    payload.writeUInt32LE(Date.now() & 0xffffffff, 0);
+    payload.writeUInt32LE((Date.now() & 0xffffffff) >>> 0, 0);
     this.serial.write(encodeCommand(CmdId.Heartbeat, payload, this.txSeq++, this.psk));
   }
 }
