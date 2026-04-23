@@ -19,3 +19,7 @@ st-flash write edge/build/aegiscore-edge.bin 0x8000000
 ```bash
 st-info --probe
 ```
+
+```bash
+git submodule update --init --recursive
+```

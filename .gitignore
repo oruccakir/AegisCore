@@ -21,6 +21,9 @@ rad.json
 #Test results file
 TestResults.xml
 
+# nodejs.
+node_modules/
+
 #latex
 *.aux
 *.log
@@ -33,6 +36,7 @@ TestResults.xml
 
 #build
 build/
+build-test/
 
 #codex
 .codex

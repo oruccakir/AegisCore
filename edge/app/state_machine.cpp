@@ -71,20 +71,27 @@ LedOutputs StateMachine::GetLedOutputs(const std::uint32_t timestamp_ms) const
     return LedOutputs{false, false};
 }
 
-SystemState StateMachine::state() const noexcept
-{
-    return state_;
-}
-
 void StateMachine::TransitionTo(const SystemState next_state,
                                 const std::uint32_t timestamp_ms) noexcept
 {
-    state_ = next_state;
+    prev_state_ = state_;
+    state_      = next_state;
 
     if (next_state == SystemState::Search)
     {
         search_started_ms_ = timestamp_ms;
     }
+}
+
+void StateMachine::ForceFailSafe(const std::uint32_t timestamp_ms) noexcept
+{
+    TransitionTo(SystemState::FailSafe, timestamp_ms);
+}
+
+void StateMachine::ForceState(const SystemState next,
+                               const std::uint32_t timestamp_ms) noexcept
+{
+    TransitionTo(next, timestamp_ms);
 }
 
 } // namespace aegis::edge

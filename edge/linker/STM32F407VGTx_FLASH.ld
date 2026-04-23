@@ -119,7 +119,16 @@ SECTIONS
         __bss_end__ = _ebss;
     } >RAM
 
-    /* 6. User heap + stack check. If these don't fit in remaining RAM, link fails. */
+    /* 6. Panic block — NOT zeroed by Reset_Handler (SAF-06 post-mortem across resets). */
+    .noinit (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.noinit)
+        *(.noinit*)
+        . = ALIGN(4);
+    } >RAM
+
+    /* 7. User heap + stack check. If these don't fit in remaining RAM, link fails. */
     ._user_heap_stack :
     {
         . = ALIGN(8);
@@ -130,7 +139,7 @@ SECTIONS
         . = ALIGN(8);
     } >RAM
 
-    /* 7. Drop compiler-generated sections we don't use. */
+    /* 8. Drop compiler-generated sections we don't use. */
     /DISCARD/ :
     {
         libc.a ( * )

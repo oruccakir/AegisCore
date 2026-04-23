@@ -17,11 +17,12 @@ extern uint32_t SystemCoreClock;
 #define configIDLE_SHOULD_YIELD                 1
 #define configUSE_MUTEXES                       0
 #define configQUEUE_REGISTRY_SIZE               0
-#define configCHECK_FOR_STACK_OVERFLOW          0
+#define configCHECK_FOR_STACK_OVERFLOW          2   /* SAF-05 */
 #define configUSE_RECURSIVE_MUTEXES             0
 #define configUSE_MALLOC_FAILED_HOOK            0
 #define configUSE_APPLICATION_TASK_TAG          0
 #define configUSE_COUNTING_SEMAPHORES           0
+#define configUSE_TRACE_FACILITY                1   /* for uxTaskGetSystemState */
 #define configUSE_TICKLESS_IDLE                 0
 #define configUSE_TIMERS                        0
 #define configSUPPORT_DYNAMIC_ALLOCATION        0
@@ -62,6 +63,7 @@ void vAssertCalled(const char* file, int line);
 #define INCLUDE_vTaskDelayUntil                 1
 #define INCLUDE_vTaskDelay                      1
 #define INCLUDE_xTaskGetSchedulerState          1
+#define INCLUDE_uxTaskGetStackHighWaterMark     1
 
 #define vPortSVCHandler                         SVC_Handler
 #define xPortPendSVHandler                      PendSV_Handler

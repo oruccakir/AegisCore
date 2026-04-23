@@ -27,7 +27,7 @@ set(FREERTOS_DIR     ${CUBE_DIR}/Middlewares/Third_Party/FreeRTOS/Source)
 set(FREERTOS_PORT_DIR ${FREERTOS_DIR}/portable/GCC/ARM_CM4F)
 
 # ---------------------------------------------------------------------------
-# Subset of HAL sources needed for Phase 1a (blink). Add more as phases grow.
+# HAL sources — enumerate explicitly to keep binary auditable (ARCH-05).
 # ---------------------------------------------------------------------------
 set(HAL_SOURCES
     ${HAL_DIR}/Src/stm32f4xx_hal.c
@@ -39,6 +39,10 @@ set(HAL_SOURCES
     ${HAL_DIR}/Src/stm32f4xx_hal_pwr_ex.c
     ${HAL_DIR}/Src/stm32f4xx_hal_flash.c
     ${HAL_DIR}/Src/stm32f4xx_hal_flash_ex.c
+    ${HAL_DIR}/Src/stm32f4xx_hal_uart.c
+    ${HAL_DIR}/Src/stm32f4xx_hal_dma.c
+    ${HAL_DIR}/Src/stm32f4xx_hal_dma_ex.c
+    ${HAL_DIR}/Src/stm32f4xx_hal_iwdg.c
 )
 
 # ---------------------------------------------------------------------------
@@ -55,12 +59,27 @@ set(FREERTOS_SOURCES
 # First-party application sources.
 # ---------------------------------------------------------------------------
 set(APP_SOURCES
+    app/ac2_framer.cpp
     app/button_classifier.cpp
+    app/crc16.cpp
+    app/fail_safe_supervisor.cpp
     app/freertos_hooks.cpp
+    app/hmac_sha256.cpp
     app/main.cpp
     app/platform_io.cpp
+    app/post.cpp
+    app/rate_limiter.cpp
+    app/replay_guard.cpp
     app/simulation_engine.cpp
     app/state_machine.cpp
+)
+
+set(BSP_SOURCES
+    bsp/fault_stubs.c
+    bsp/mpu_config.cpp
+    bsp/panic.cpp
+    bsp/uart_driver.cpp
+    bsp/watchdog.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -73,6 +92,7 @@ add_executable(${ELF_TARGET}
     bsp/system_stm32f4xx.c
     bsp/stm32f4xx_it.c
     ${APP_SOURCES}
+    ${BSP_SOURCES}
     ${HAL_SOURCES}
     ${FREERTOS_SOURCES}
 )
@@ -87,10 +107,25 @@ target_include_directories(${ELF_TARGET} PRIVATE
     ${HAL_DIR}/Inc
 )
 
+# Git SHA + build timestamp for version.hpp (DEP-02).
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE AEGIS_GIT_SHA
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT AEGIS_GIT_SHA)
+    set(AEGIS_GIT_SHA "00000000")
+endif()
+string(TIMESTAMP AEGIS_BUILD_TS "%s" UTC)
+
 target_compile_definitions(${ELF_TARGET} PRIVATE
     STM32F407xx
     USE_HAL_DRIVER
-    HSE_VALUE=8000000U       # 8 MHz HSE crystal on the DISC1 board.
+    HSE_VALUE=8000000U
+    AEGIS_GIT_SHA="${AEGIS_GIT_SHA}"
+    AEGIS_BUILD_TS=${AEGIS_BUILD_TS}U
 )
 
 # ---------------------------------------------------------------------------
@@ -117,13 +152,24 @@ target_compile_options(${ELF_TARGET} PRIVATE $<$<CONFIG:Release>:-Os -g>)
 
 # Treat only our own sources as warnings-as-errors — vendor HAL may warn.
 set_source_files_properties(
+    app/ac2_framer.cpp
     app/button_classifier.cpp
+    app/crc16.cpp
+    app/fail_safe_supervisor.cpp
     app/freertos_hooks.cpp
+    app/hmac_sha256.cpp
     app/main.cpp
     app/platform_io.cpp
+    app/post.cpp
+    app/rate_limiter.cpp
+    app/replay_guard.cpp
     app/simulation_engine.cpp
     app/state_machine.cpp
+    bsp/mpu_config.cpp
+    bsp/panic.cpp
     bsp/stm32f4xx_it.c
+    bsp/uart_driver.cpp
+    bsp/watchdog.cpp
     PROPERTIES COMPILE_OPTIONS "-Werror"
 )
 

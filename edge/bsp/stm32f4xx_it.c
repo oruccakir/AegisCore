@@ -13,16 +13,27 @@
 extern void Aegis_HandleExti0Irq(void);
 extern void xPortSysTickHandler(void);
 
-void NMI_Handler(void)        { while (1) { } }
-void HardFault_Handler(void)  { while (1) { } }
-void MemManage_Handler(void)  { while (1) { } }
-void BusFault_Handler(void)   { while (1) { } }
-void UsageFault_Handler(void) { while (1) { } }
-void DebugMon_Handler(void)   { }
+// Fault handlers are in bsp/fault_stubs.c (naked trampolines → Panic_HardFaultImpl).
+
+extern void UartDriver_OnUsart2Irq(void);
+extern void UartDriver_OnDma1Stream5Irq(void);
+
+void NMI_Handler(void) { while (1) { } }
+void DebugMon_Handler(void) { }
 
 void EXTI0_IRQHandler(void)
 {
     Aegis_HandleExti0Irq();
+}
+
+void USART2_IRQHandler(void)
+{
+    UartDriver_OnUsart2Irq();
+}
+
+void DMA1_Stream5_IRQHandler(void)
+{
+    UartDriver_OnDma1Stream5Irq();
 }
 
 void SysTick_Handler(void)

@@ -81,6 +81,9 @@ void GpioInit()
     HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 }
 
+aegis::edge::ButtonEdgeCallback g_button_cb  = nullptr;
+void*                           g_button_ctx = nullptr;
+
 } // namespace
 
 namespace aegis::edge {
@@ -110,9 +113,33 @@ bool ReadButtonPressed()
     return HAL_GPIO_ReadPin(kButtonPort, kUserButtonPin) == GPIO_PIN_SET;
 }
 
+void DelayMs(std::uint32_t ms)
+{
+    HAL_Delay(ms);
+}
+
+bool IsHseClockReady() noexcept
+{
+    return (RCC->CR & RCC_CR_HSERDY_Msk) != 0U;
+}
+
+void SetButtonEdgeCallback(ButtonEdgeCallback cb, void* ctx) noexcept
+{
+    g_button_cb  = cb;
+    g_button_ctx = ctx;
+}
+
 } // namespace aegis::edge
 
 extern "C" void Aegis_HandleExti0Irq(void)
 {
     HAL_GPIO_EXTI_IRQHandler(kUserButtonPin);
+}
+
+extern "C" void HAL_GPIO_EXTI_Callback(uint16_t gpio_pin)
+{
+    if (gpio_pin == kUserButtonPin && g_button_cb != nullptr)
+    {
+        g_button_cb(g_button_ctx);
+    }
 }
