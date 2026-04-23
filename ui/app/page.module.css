@@ -1,0 +1,276 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  animation: flicker 8s infinite;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+
+.logo { display: flex; align-items: baseline; gap: 4px; }
+
+.logoAegis {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--green);
+  letter-spacing: 0.15em;
+  text-shadow: 0 0 12px rgba(0,255,65,0.5);
+}
+.logoCore {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+}
+.logoCci {
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.2em;
+  margin-left: 6px;
+}
+
+.stateChip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  padding: 4px 14px;
+  border: 1px solid;
+  border-radius: 2px;
+  margin-left: auto;
+}
+.stateDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.connRow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* ── MAIN ── */
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 340px 1fr 280px;
+  min-height: 0;
+  gap: 0;
+}
+
+/* ── LEFT ── */
+.left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 28px 20px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.radarWrap {
+  position: relative;
+  filter: drop-shadow(0 0 20px rgba(0,255,65,0.15));
+}
+
+.stateDesc {
+  width: 100%;
+  border: 1px solid;
+  border-radius: 2px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+}
+.stateDescTitle {
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  margin-bottom: 6px;
+}
+.stateDescText { color: var(--text-dim); font-size: 11px; line-height: 1.6; }
+
+/* ── CENTER ── */
+.center {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.panelTitle {
+  font-family: var(--display);
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Metrics */
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.metricLabel {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--text-faint);
+}
+.metricValue {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+/* State buttons */
+.btnGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.stateBtn {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--border-bright);
+  color: var(--text-dim);
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  padding: 10px 16px;
+  text-align: left;
+  border-radius: 2px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stateBtn:not(:disabled):hover {
+  border-color: var(--green-dim);
+  color: var(--green);
+  background: var(--green-faint);
+}
+.stateBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.stateBtnActive {
+  background: rgba(0,255,65,0.05);
+}
+
+.activeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: pulse-glow 2s infinite;
+  flex-shrink: 0;
+}
+
+.divider { height: 1px; background: var(--border); margin: 12px 0; }
+
+.btnRow { display: flex; gap: 8px; }
+
+.btn {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border-bright);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding: 8px 10px;
+  border-radius: 2px;
+  transition: all 0.15s;
+}
+.btn:not(:disabled):hover { border-color: var(--green-dim); color: var(--green); background: var(--green-faint); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.btnSecondary {}
+
+/* Banners */
+.failBanner {
+  background: rgba(255,34,34,0.08);
+  border: 1px solid var(--red-dim);
+  color: var(--red);
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  padding: 12px 16px;
+  border-radius: 2px;
+  animation: blink 1.5s infinite;
+  text-align: center;
+}
+.warnBanner {
+  background: rgba(255,170,0,0.08);
+  border: 1px solid var(--amber-dim);
+  color: var(--amber);
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 12px 16px;
+  border-radius: 2px;
+  text-align: center;
+}
+
+/* ── RIGHT ── */
+.right {
+  border-left: 1px solid var(--border);
+  padding: 20px 16px;
+  background: var(--bg-panel);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── FOOTER ── */
+.footer {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  padding: 7px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.1em;
+  flex-shrink: 0;
+}

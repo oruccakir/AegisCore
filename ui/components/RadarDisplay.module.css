@@ -1,0 +1,23 @@
+.wrap {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  flex-shrink: 0;
+}
+
+.canvas {
+  display: block;
+  border-radius: 50%;
+  image-rendering: pixelated;
+}
+
+.ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid var(--border-bright);
+  box-shadow:
+    0 0 12px rgba(0, 255, 65, 0.08),
+    inset 0 0 12px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
