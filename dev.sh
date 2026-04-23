@@ -8,6 +8,7 @@ SERIAL_PORT="${SERIAL_PORT:-/dev/ttyACM0}"
 LOG_LEVEL="${LOG_LEVEL:-debug}"
 SKIP_FLASH="${SKIP_FLASH:-0}"
 GW_PID=0
+UI_PID=0
 
 log()  { echo -e "${BOLD}[dev.sh]${RESET} $*"; }
 ok()   { echo -e "${GREEN}[dev.sh] ✓ $*${RESET}"; }
@@ -17,7 +18,9 @@ warn() { echo -e "${YELLOW}[dev.sh] ! $*${RESET}"; }
 cleanup() {
     echo ""
     warn "Shutting down..."
-    [[ $GW_PID -ne 0 ]] && kill "$GW_PID" 2>/dev/null && wait "$GW_PID" 2>/dev/null || true
+    [[ $UI_PID -ne 0 ]] && kill "$UI_PID" 2>/dev/null || true
+    [[ $GW_PID -ne 0 ]] && kill "$GW_PID" 2>/dev/null || true
+    wait 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -63,9 +66,14 @@ log "Building gateway TypeScript..."
 (cd gateway && npm run build 2>&1 | grep -v "^$" | sed "s/^/${CYAN}[gateway]${RESET} /")
 ok "Gateway built"
 
-# ── 5. Start gateway ──────────────────────────────────────────────────────
+# ── 5. Build UI ───────────────────────────────────────────────────────────
+log "Building UI..."
+(cd ui && npm install --silent 2>/dev/null && npm run build 2>&1 \
+    | grep -E "error|Route|✓" | sed "s/^/${CYAN}[ui]${RESET} /")
+ok "UI built"
+
+# ── 6. Start gateway ──────────────────────────────────────────────────────
 log "Starting gateway (LOG_LEVEL=$LOG_LEVEL)..."
-echo ""
 (cd gateway && SERIAL_PORT="$SERIAL_PORT" LOG_LEVEL="$LOG_LEVEL" node dist/index.js 2>&1 \
     | sed "s/^/${GREEN}[gateway]${RESET} /") &
 GW_PID=$!
@@ -74,10 +82,25 @@ sleep 1
 if ! kill -0 "$GW_PID" 2>/dev/null; then
     fail "Gateway failed to start"
 fi
+ok "Gateway started"
 
+# ── 7. Start UI ───────────────────────────────────────────────────────────
+log "Starting UI on http://localhost:3000 ..."
+fuser -k 3000/tcp 2>/dev/null || true
+(cd ui && node node_modules/.bin/next start -p 3000 2>&1 \
+    | sed "s/^/${CYAN}[ui]${RESET} /") &
+UI_PID=$!
+
+sleep 3
+if ! kill -0 "$UI_PID" 2>/dev/null; then
+    fail "UI failed to start"
+fi
+
+echo ""
 echo -e "${BOLD}══════════════════════════════════════════${RESET}"
 echo -e "${BOLD} System live. Ctrl+C to stop.${RESET}"
-echo -e "${BOLD} WebSocket → ws://localhost:8443 (protocol: ac2.v2)${RESET}"
+echo -e "${BOLD} Dashboard  → http://localhost:3000${RESET}"
+echo -e "${BOLD} WebSocket  → ws://localhost:8443${RESET}"
 echo -e "${BOLD}══════════════════════════════════════════${RESET}"
 echo ""
 
