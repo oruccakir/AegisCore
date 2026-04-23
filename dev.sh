@@ -74,6 +74,9 @@ ok "UI built"
 
 # ── 6. Start gateway ──────────────────────────────────────────────────────
 log "Starting gateway (LOG_LEVEL=$LOG_LEVEL)..."
+pkill -f "node dist/index.js" 2>/dev/null || true
+fuser -k 8443/tcp 2>/dev/null || true
+sleep 1
 (cd gateway && SERIAL_PORT="$SERIAL_PORT" LOG_LEVEL="$LOG_LEVEL" node dist/index.js 2>&1 \
     | sed "s/^/${GREEN}[gateway]${RESET} /") &
 GW_PID=$!
