@@ -47,8 +47,10 @@ export class SerialBridge extends EventEmitter {
   }
 
   write(frame: Buffer): void {
+    log('debug', 'serial TX', { bytes: frame.length, cmd: `0x${frame[7]!.toString(16).padStart(2,'0')}` });
     this.port.write(frame, (err) => {
       if (err) log('error', 'Serial write error', err.message);
+      else     log('debug', 'serial TX done');
     });
   }
 
