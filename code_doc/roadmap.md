@@ -63,3 +63,32 @@ Read the documentation files in this order. Each one builds on the previous.
 
 - [20_version.md](20_version.md) — CMake-injected git SHA and build timestamp
 - [21_bsp_interrupts.md](21_bsp_interrupts.md) — ISR table, SysTick, FreeRTOS hooks
+
+---
+
+## 8. Understand the gateway (Node.js bridge)
+
+Read the gateway overview first, then follow the data path bottom-up.
+
+- [gw_01_overview.md](gw_01_overview.md) — architecture, data flow diagram, reading order
+- [gw_02_config.md](gw_02_config.md) — environment variables, logger
+- [gw_03_index.md](gw_03_index.md) — entry point, OS signal handling
+- [gw_08_crc16.md](gw_08_crc16.md) — CRC-16/CCITT-FALSE lookup table
+- [gw_09_hmac.md](gw_09_hmac.md) — HMAC-SHA-256 (Node.js crypto)
+- [gw_07_ac2_framer.md](gw_07_ac2_framer.md) — binary frame encoder (gateway → edge)
+- [gw_06_ac2_parser.md](gw_06_ac2_parser.md) — byte-by-byte frame decoder (edge → gateway)
+- [gw_05_serial_bridge.md](gw_05_serial_bridge.md) — serialport wrapper
+- [gw_10_ws_schemas.md](gw_10_ws_schemas.md) — Zod schemas, WebSocket message types
+- [gw_11_ws_server.md](gw_11_ws_server.md) — WebSocket server
+- [gw_04_bridge.md](gw_04_bridge.md) — orchestrator (serial ↔ WebSocket)
+
+---
+
+## 9. Understand the UI (Next.js dashboard)
+
+- [ui_01_overview.md](ui_01_overview.md) — architecture, component map, state machine rules
+- [ui_02_layout.md](ui_02_layout.md) — root layout, global CSS
+- [ui_04_use_ac2_socket.md](ui_04_use_ac2_socket.md) — WebSocket hook (data layer)
+- [ui_03_page.md](ui_03_page.md) — main dashboard component
+- [ui_05_radar_display.md](ui_05_radar_display.md) — canvas animation
+- [ui_06_event_log.md](ui_06_event_log.md) — event log component
