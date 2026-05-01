@@ -107,10 +107,44 @@
   margin: 10px 0 8px;
 }
 
+.createSection {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
 .createRow {
   display: flex;
   gap: 6px;
   align-items: center;
+}
+
+.paramWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.paramHint {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding-left: 2px;
+}
+
+.paramLabel {
+  font-size: 8px;
+  font-family: var(--display);
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.paramCalc {
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--amber);
+  white-space: nowrap;
 }
 
 .select {

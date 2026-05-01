@@ -14,9 +14,26 @@ const TASK_STATE: Record<number, string> = {
 
 const TASK_TYPE_LABELS = ['BLINK', 'COUNTER', 'LOAD'];
 
+const PARAM_META: Record<0 | 1 | 2, { label: string; hint: (p: number) => string }> = {
+  0: {
+    label: 'half-period (×100 ms)',
+    hint:  (p) => `LED toggles every ${p * 100} ms → ${p > 0 ? (1000 / (p * 100)).toFixed(2) : '∞'} Hz`,
+  },
+  1: {
+    label: 'period (×10 ms)',
+    hint:  (p) => `counts every ${p * 10} ms → ${p > 0 ? Math.round(1000 / (p * 10)) : '∞'} /s`,
+  },
+  2: {
+    label: 'spin multiplier (×10 000)',
+    hint:  (p) => `busy-wait ~${(p * 10000 * 20 / 1_000_000).toFixed(1)} ms / 100 ms window`,
+  },
+};
+
 export default function TaskMonitor({ tasks, send }: Props) {
   const [newType,  setNewType]  = useState<0 | 1 | 2>(0);
   const [newParam, setNewParam] = useState(5);
+
+  const meta = PARAM_META[newType];
 
   function createTask() {
     send({ type: 'cmd.create_task', task_type: newType, param: newParam });
@@ -69,22 +86,29 @@ export default function TaskMonitor({ tasks, send }: Props) {
 
       <div className={styles.divider} />
 
-      <div className={styles.createRow}>
-        <select
-          className={styles.select}
-          value={newType}
-          onChange={(e) => setNewType(Number(e.target.value) as 0 | 1 | 2)}>
-          {TASK_TYPE_LABELS.map((label, i) => (
-            <option key={label} value={i}>{label}</option>
-          ))}
-        </select>
-        <input
-          className={styles.paramInput}
-          type="number" min={0} max={255}
-          value={newParam}
-          onChange={(e) => setNewParam(Number(e.target.value))}
-          title="param (BLINK=period×100ms, LOAD=cpu%)" />
-        <button className={styles.addBtn} onClick={createTask}>+ ADD</button>
+      <div className={styles.createSection}>
+        <div className={styles.createRow}>
+          <select
+            className={styles.select}
+            value={newType}
+            onChange={(e) => setNewType(Number(e.target.value) as 0 | 1 | 2)}>
+            {TASK_TYPE_LABELS.map((label, i) => (
+              <option key={label} value={i}>{label}</option>
+            ))}
+          </select>
+          <div className={styles.paramWrap}>
+            <input
+              className={styles.paramInput}
+              type="number" min={0} max={255}
+              value={newParam}
+              onChange={(e) => setNewParam(Math.max(0, Math.min(255, Number(e.target.value))))} />
+          </div>
+          <button className={styles.addBtn} onClick={createTask}>+ ADD</button>
+        </div>
+        <div className={styles.paramHint}>
+          <span className={styles.paramLabel}>{meta.label}</span>
+          <span className={styles.paramCalc}>{meta.hint(newParam)}</span>
+        </div>
       </div>
     </div>
   );
