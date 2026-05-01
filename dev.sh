@@ -7,6 +7,10 @@ CYAN=$'\033[0;36m'; BOLD=$'\033[1m'; RESET=$'\033[0m'
 SERIAL_PORT="${SERIAL_PORT:-/dev/ttyACM0}"
 LOG_LEVEL="${LOG_LEVEL:-debug}"
 SKIP_FLASH="${SKIP_FLASH:-0}"
+INFERENCE_HOST="${INFERENCE_HOST:-127.0.0.1}"
+INFERENCE_PORT="${INFERENCE_PORT:-7979}"
+INFERENCE_URL="${INFERENCE_URL:-http://${INFERENCE_HOST}:${INFERENCE_PORT}/infer}"
+MODEL_PID=0
 GW_PID=0
 UI_PID=0
 
@@ -20,6 +24,7 @@ cleanup() {
     warn "Shutting down..."
     [[ $UI_PID -ne 0 ]] && kill "$UI_PID" 2>/dev/null || true
     [[ $GW_PID -ne 0 ]] && kill "$GW_PID" 2>/dev/null || true
+    [[ $MODEL_PID -ne 0 ]] && kill "$MODEL_PID" 2>/dev/null || true
     wait 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
@@ -72,12 +77,26 @@ log "Building UI..."
     | grep -E "error|Route|✓" | sed "s/^/${CYAN}[ui]${RESET} /")
 ok "UI built"
 
-# ── 6. Start gateway ──────────────────────────────────────────────────────
+# ── 6. Start model server ─────────────────────────────────────────────────
+log "Starting model server on http://${INFERENCE_HOST}:${INFERENCE_PORT} ..."
+fuser -k "${INFERENCE_PORT}/tcp" 2>/dev/null || true
+sleep 1
+(cd inference && python -m uvicorn server:app --host "$INFERENCE_HOST" --port "$INFERENCE_PORT" 2>&1 \
+    | sed "s/^/${YELLOW}[model]${RESET} /") &
+MODEL_PID=$!
+
+sleep 2
+if ! kill -0 "$MODEL_PID" 2>/dev/null; then
+    fail "Model server failed to start. Install dependencies with: pip install -r inference/requirements.txt"
+fi
+ok "Model server started"
+
+# ── 7. Start gateway ──────────────────────────────────────────────────────
 log "Starting gateway (LOG_LEVEL=$LOG_LEVEL)..."
 pkill -f "node dist/index.js" 2>/dev/null || true
 fuser -k 8443/tcp 2>/dev/null || true
 sleep 1
-(cd gateway && SERIAL_PORT="$SERIAL_PORT" LOG_LEVEL="$LOG_LEVEL" node dist/index.js 2>&1 \
+(cd gateway && SERIAL_PORT="$SERIAL_PORT" LOG_LEVEL="$LOG_LEVEL" INFERENCE_URL="$INFERENCE_URL" node dist/index.js 2>&1 \
     | sed "s/^/${GREEN}[gateway]${RESET} /") &
 GW_PID=$!
 
@@ -87,7 +106,7 @@ if ! kill -0 "$GW_PID" 2>/dev/null; then
 fi
 ok "Gateway started"
 
-# ── 7. Start UI ───────────────────────────────────────────────────────────
+# ── 8. Start UI ───────────────────────────────────────────────────────────
 log "Starting UI on http://localhost:3000 ..."
 pkill -f "next start" 2>/dev/null || true
 fuser -k 3000/tcp 2>/dev/null || true
@@ -105,6 +124,7 @@ echo -e "${BOLD}═════════════════════�
 echo -e "${BOLD} System live. Ctrl+C to stop.${RESET}"
 echo -e "${BOLD} Dashboard  → http://localhost:3000${RESET}"
 echo -e "${BOLD} WebSocket  → ws://localhost:8443${RESET}"
+echo -e "${BOLD} Model      → http://${INFERENCE_HOST}:${INFERENCE_PORT}/health${RESET}"
 echo -e "${BOLD}══════════════════════════════════════════${RESET}"
 echo ""
 

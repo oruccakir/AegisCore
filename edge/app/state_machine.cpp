@@ -68,6 +68,11 @@ LedOutputs StateMachine::GetLedOutputs(const std::uint32_t timestamp_ms) const
         return LedOutputs{false, true};
     }
 
+    if (state_ == SystemState::Idle)
+    {
+        return LedOutputs{true, false};
+    }
+
     return LedOutputs{false, false};
 }
 

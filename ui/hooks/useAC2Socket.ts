@@ -36,13 +36,22 @@ export interface TaskInfo {
   task_id:         number; // bit7=1 → user task, bits[2:0] = slot index
 }
 
+export interface DetectionInfo {
+  class_id: number;
+  class_name: string;
+  confidence: number;
+  latency_ms: number;
+  ts: number;
+}
+
 export type OutCmd =
   | { type: 'cmd.set_state'; targetState: 'idle' | 'search' | 'track' | 'fail_safe' }
   | { type: 'cmd.manual_lock'; lock: boolean }
   | { type: 'cmd.get_version' }
   | { type: 'cmd.heartbeat' }
   | { type: 'cmd.create_task'; task_type: 0 | 1 | 2; param: number }
-  | { type: 'cmd.delete_task'; slot_index: number };
+  | { type: 'cmd.delete_task'; slot_index: number }
+  | { type: 'cmd.vision_frame'; jpeg_b64: string };
 
 const ERR_CODES: Record<number, string> = {
   1: 'INVALID_CMD', 2: 'INVALID_PAYLOAD', 3: 'INVALID_TRANSITION',
@@ -63,6 +72,7 @@ export function useAC2Socket(url: string) {
   const [sysInfo,   setSysInfo]   = useState<SystemInfo>({ uptime_ms: 0 });
   const [log,       setLog]       = useState<LogEntry[]>([]);
   const [tasks,     setTasks]     = useState<TaskInfo[]>([]);
+  const [detection, setDetection] = useState<DetectionInfo | null>(null);
 
   const addLog = useCallback((type: string, text: string, level: LogEntry['level'] = 'info') => {
     setLog(prev => {
@@ -149,6 +159,23 @@ export function useAC2Socket(url: string) {
           case 'evt.task_list':
             setTasks(d.tasks as TaskInfo[]);
             break;
+
+          case 'evt.detection':
+            setDetection({
+              class_id: d.class_id,
+              class_name: d.class_name,
+              confidence: d.confidence,
+              latency_ms: d.latency_ms,
+              ts: Date.now(),
+            });
+            addLog('VISION',
+              `${d.class_name} ${d.confidence}% (${d.latency_ms}ms)`,
+              d.class_id === 1 ? 'ok' : 'info');
+            break;
+
+          case 'evt.error':
+            addLog('ERR', d.message, 'error');
+            break;
         }
       } catch {
         // ignore malformed
@@ -171,5 +198,5 @@ export function useAC2Socket(url: string) {
     }
   }, []);
 
-  return { status, telemetry, sysInfo, log, tasks, send };
+  return { status, telemetry, sysInfo, log, tasks, detection, send };
 }

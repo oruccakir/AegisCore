@@ -24,6 +24,7 @@ export const CmdId = {
   AuditEvent:    0x31,
   CreateTask:    0x50,
   DeleteTask:    0x51,
+  DetectionResult: 0x60,
   Ack:           0x80,
   Nack:          0x81,
   Heartbeat:     0x99,

@@ -41,6 +41,11 @@ export const CmdDeleteTaskSchema = z.object({
   slot_index: z.number().int().min(0).max(3),
 });
 
+export const CmdVisionFrameSchema = z.object({
+  type:     z.literal('cmd.vision_frame'),
+  jpeg_b64: z.string().min(1),
+});
+
 export const InboundCmdSchema = z.discriminatedUnion('type', [
   CmdSetStateSchema,
   CmdManualLockSchema,
@@ -48,6 +53,7 @@ export const InboundCmdSchema = z.discriminatedUnion('type', [
   CmdHeartbeatSchema,
   CmdCreateTaskSchema,
   CmdDeleteTaskSchema,
+  CmdVisionFrameSchema,
 ]);
 export type InboundCmd = z.infer<typeof InboundCmdSchema>;
 
@@ -122,6 +128,14 @@ export interface EvtTaskList {
   tasks: PackedTaskEntry[];
 }
 
+export interface EvtDetection {
+  type:       'evt.detection';
+  class_id:   number;
+  class_name: string;
+  confidence: number;
+  latency_ms: number;
+}
+
 export type OutboundEvent =
   | EvtReportState
   | EvtTelemetry
@@ -131,7 +145,8 @@ export type OutboundEvent =
   | EvtNack
   | EvtAck
   | EvtError
-  | EvtTaskList;
+  | EvtTaskList
+  | EvtDetection;
 
 /** Wrap an event in the standard envelope. */
 export function envelope(seq: number, event: OutboundEvent): WsEnvelope {

@@ -85,6 +85,15 @@ describe('AC2Framer', () => {
     expect(frame.length).toBe(18 + 1); // OVERHEAD + 1
   });
 
+  it('encodes a 2-byte detection result command', () => {
+    const payload = Buffer.from([0x01, 0x87]); // person, 87%
+    const frame   = encodeCommand(CmdId.DetectionResult, payload, 9, PSK);
+    const parser  = new AC2Parser();
+    const frames  = feedFrame(parser, frame);
+    expect(frames[0]!.cmd).toBe(CmdId.DetectionResult);
+    expect(frames[0]!.payload).toEqual(payload);
+  });
+
   it('encodeTelemetry produces a frame with all-zero HMAC', () => {
     const frame = encodeTelemetry(CmdId.Heartbeat, Buffer.from([0,0,0,0]), 0);
     // HMAC starts at byte 8 + 4 (payload) = 12; length 8

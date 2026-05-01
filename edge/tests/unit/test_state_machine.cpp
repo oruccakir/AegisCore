@@ -15,6 +15,23 @@ TEST(StateMachine, InitialStateIsIdle)
     EXPECT_EQ(sm.state(), SystemState::Idle);
 }
 
+TEST(StateMachine, IdleLedIsSolidGreen)
+{
+    StateMachine sm;
+    const LedOutputs leds = sm.GetLedOutputs(0U);
+    EXPECT_TRUE(leds.green_on);
+    EXPECT_FALSE(leds.red_on);
+}
+
+TEST(StateMachine, TrackLedIsSolidRed)
+{
+    StateMachine sm;
+    sm.ForceState(SystemState::Track, 0U);
+    const LedOutputs leds = sm.GetLedOutputs(0U);
+    EXPECT_FALSE(leds.green_on);
+    EXPECT_TRUE(leds.red_on);
+}
+
 TEST(StateMachine, IdleToSearchOnShortPress)
 {
     StateMachine sm;

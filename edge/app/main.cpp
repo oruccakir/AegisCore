@@ -50,6 +50,9 @@ constexpr TickType_t    kSimulationPeriodTicks  = pdMS_TO_TICKS(100U);
 constexpr TickType_t    kHeartbeatPeriodTicks   = pdMS_TO_TICKS(1000U);
 constexpr TickType_t    kTelemetryPeriodTicks   = pdMS_TO_TICKS(1000U);
 constexpr TickType_t    kTaskListPeriodTicks    = pdMS_TO_TICKS(2000U);
+constexpr std::uint8_t  kDetectionClassNone     = 0U;
+constexpr std::uint8_t  kDetectionClassPerson   = 1U;
+constexpr std::uint8_t  kDetectionThresholdPct  = 50U;
 
 // ---- Queue item types -------------------------------------------------------
 
@@ -124,6 +127,17 @@ std::uint32_t gTxSeq = 0U;
 
 // Blue LED off time — set when GetVersion arrives, cleared by StateMachineTask.
 std::uint32_t gVersionLedOffMs = 0U;
+
+// Blue LED off time for detection pulse (300 ms).
+std::uint32_t gDetectionLedOffMs = 0U;
+
+// Last detection result received from gateway.
+struct LastDetection {
+    std::uint8_t  class_id       = 0U;
+    std::uint8_t  confidence_pct = 0U;
+    bool          valid          = false;
+};
+LastDetection gLastDetection = {};
 
 // Yellow LED off time — set when ManualLock arrives, cleared by StateMachineTask.
 std::uint32_t gManualLockLedOffMs = 0U;
@@ -398,6 +412,38 @@ static void DispatchRemoteCmd(StateMachine& sm,
         }
         break;
 
+    case CmdId::kDetectionResult: {
+        if (rcmd.payload_len != static_cast<std::uint8_t>(sizeof(PayloadDetectionResult))) {
+            SendNack(rcmd.seq, ErrCode::kInvalidPayload);
+            break;
+        }
+        const auto* pd =
+            reinterpret_cast<const PayloadDetectionResult*>(rcmd.payload);
+        gLastDetection.class_id       = pd->class_id;
+        gLastDetection.confidence_pct = pd->confidence_pct;
+        gLastDetection.valid          = true;
+        gDetectionLedOffMs = MillisecondsSinceBoot() + 300U;
+
+        if (pd->class_id == kDetectionClassPerson &&
+            pd->confidence_pct >= kDetectionThresholdPct)
+        {
+            sm.ForceState(SystemState::Track, now_ms);
+        }
+        else if (pd->class_id == kDetectionClassNone ||
+                 pd->confidence_pct < kDetectionThresholdPct)
+        {
+            sm.ForceState(SystemState::Idle, now_ms);
+        }
+        else
+        {
+            SendNack(rcmd.seq, ErrCode::kInvalidPayload);
+            break;
+        }
+
+        SendAck(rcmd.seq);
+        break;
+    }
+
     case CmdId::kCreateTask: {
         if (rcmd.payload_len < static_cast<std::uint8_t>(sizeof(PayloadCreateTask))) {
             SendNack(rcmd.seq, ErrCode::kInvalidPayload);
@@ -626,7 +672,8 @@ void StateMachineTask(void* /*ctx*/)
 
         const std::uint32_t now_led = MillisecondsSinceBoot();
         LedOutputs leds = sm.GetLedOutputs(now_led);
-        leds.blue_on   = (gVersionLedOffMs    != 0U && now_led < gVersionLedOffMs);
+        leds.blue_on   = (gVersionLedOffMs   != 0U && now_led < gVersionLedOffMs)
+                         || (gDetectionLedOffMs != 0U && now_led < gDetectionLedOffMs);
         leds.yellow_on = (gManualLockLedOffMs != 0U && now_led < gManualLockLedOffMs)
                          || static_cast<bool>(gUserBlinkState);
         ApplyLedOutputs(leds);

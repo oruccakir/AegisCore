@@ -4,6 +4,8 @@ export const Config = {
   serialBaud:   Number(process.env['SERIAL_BAUD'] ?? '115200'),
   wsPort:       Number(process.env['WS_PORT']  ?? '8443'),
   wsHost:       process.env['WS_HOST']       ?? '0.0.0.0',
+  inferenceUrl: process.env['INFERENCE_URL'] ?? 'http://127.0.0.1:7979/infer',
+  visionMaxHz:  Number(process.env['VISION_MAX_HZ'] ?? '4'),
 
   // Pre-shared key (hex string, 16 bytes = 32 hex chars).
   // Must match kPsk[] in edge/app/main.cpp.

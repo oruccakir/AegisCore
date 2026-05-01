@@ -15,6 +15,13 @@ const STATE_NUM: Record<string, number> = {
 
 const HB_INTERVAL_MS = 1_000;
 const PSK_HEX = Config.pskHex;
+const VISION_TIMEOUT_MS = 3_000;
+
+interface InferenceResponse {
+  class_id: number;
+  class_name: string;
+  confidence: number;
+}
 
 export class Bridge {
   private serial:    SerialBridge;
@@ -22,6 +29,7 @@ export class Bridge {
   private psk:       Buffer;
   private txSeq      = 0;
   private hbTimer:   ReturnType<typeof setInterval> | null = null;
+  private lastVisionTxMs = 0;
 
   constructor() {
     this.serial = new SerialBridge(Config.serialPort, Config.serialBaud);
@@ -199,6 +207,57 @@ export class Bridge {
         this.serial.write(encodeCommand(CmdId.DeleteTask, payload, this.txSeq++, this.psk));
         break;
       }
+
+      case 'cmd.vision_frame':
+        void this.handleVisionFrame(cmd.jpeg_b64);
+        break;
+    }
+  }
+
+  private async handleVisionFrame(jpegB64: string): Promise<void> {
+    const now = Date.now();
+    const minIntervalMs = Math.floor(1000 / Math.max(1, Config.visionMaxHz));
+    if (now - this.lastVisionTxMs < minIntervalMs) {
+      log('debug', 'vision frame throttled');
+      return;
+    }
+    this.lastVisionTxMs = now;
+
+    const started = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), VISION_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(Config.inferenceUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jpeg_b64: jpegB64 }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`inference HTTP ${response.status}`);
+      }
+
+      const result = await response.json() as InferenceResponse;
+      const classId = result.class_id === 1 ? 1 : 0;
+      const confidence = clampPercent(Math.floor(result.confidence * 100));
+      const payload = Buffer.from([classId, confidence]);
+
+      this.serial.write(encodeCommand(CmdId.DetectionResult, payload, this.txSeq++, this.psk));
+      this.ws.broadcast({
+        type: 'evt.detection',
+        class_id: classId,
+        class_name: result.class_name || (classId === 1 ? 'person' : 'none'),
+        confidence,
+        latency_ms: Date.now() - started,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'inference failed';
+      log('warn', 'vision inference failed', { message });
+      this.ws.broadcast({ type: 'evt.error', message: `vision inference failed: ${message}` });
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -212,3 +271,10 @@ export class Bridge {
 }
 
 function hex(n: number): string { return `0x${n.toString(16).padStart(2, '0')}`; }
+
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (value < 0) return 0;
+  if (value > 100) return 100;
+  return value;
+}

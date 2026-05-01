@@ -15,15 +15,16 @@ namespace CmdId {
     inline constexpr std::uint8_t kManualLock     = 0x11U;
     inline constexpr std::uint8_t kResetAck       = 0x12U;
     inline constexpr std::uint8_t kReportState    = 0x20U;
-    inline constexpr std::uint8_t kTelemetryTick  = 0x21U;
-    inline constexpr std::uint8_t kTaskList       = 0x22U;
-    inline constexpr std::uint8_t kCreateTask     = 0x50U;
-    inline constexpr std::uint8_t kDeleteTask     = 0x51U;
-    inline constexpr std::uint8_t kFaultReport    = 0x30U;
-    inline constexpr std::uint8_t kAuditEvent     = 0x31U;
-    inline constexpr std::uint8_t kAck            = 0x80U;
-    inline constexpr std::uint8_t kNack           = 0x81U;
-    inline constexpr std::uint8_t kHeartbeat      = 0x99U;
+    inline constexpr std::uint8_t kTelemetryTick   = 0x21U;
+    inline constexpr std::uint8_t kTaskList        = 0x22U;
+    inline constexpr std::uint8_t kFaultReport     = 0x30U;
+    inline constexpr std::uint8_t kAuditEvent      = 0x31U;
+    inline constexpr std::uint8_t kCreateTask      = 0x50U;
+    inline constexpr std::uint8_t kDeleteTask      = 0x51U;
+    inline constexpr std::uint8_t kDetectionResult = 0x60U;
+    inline constexpr std::uint8_t kAck             = 0x80U;
+    inline constexpr std::uint8_t kNack            = 0x81U;
+    inline constexpr std::uint8_t kHeartbeat       = 0x99U;
 }
 
 // NACK error codes (IRS §4).
@@ -132,6 +133,13 @@ struct __attribute__((packed)) PayloadDeleteTask
     std::uint8_t slot_index;
 };
 static_assert(sizeof(PayloadDeleteTask) == 1U);
+
+struct __attribute__((packed)) PayloadDetectionResult
+{
+    std::uint8_t class_id;       // 0=no detection, 1=person
+    std::uint8_t confidence_pct; // floor(confidence * 100)
+};
+static_assert(sizeof(PayloadDetectionResult) == 2U);
 
 } // namespace aegis::edge
 
