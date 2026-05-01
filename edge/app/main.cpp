@@ -475,11 +475,42 @@ static void QueueTaskList() noexcept
     QueueTx(CmdId::kTaskList, payload, plen);
 }
 
+// Previous-sample accumulators for delta CPU-load calculation.
+static std::uint32_t sPrevTotalRt = 0U;
+static std::uint32_t sPrevIdleRt  = 0U;
+
 static void QueueTelemetryTick(const StateMachine& sm) noexcept
 {
+    // CPU load: delta(used) / delta(total) over the last telemetry period.
+    // Cumulative totals grow without bound → always use delta between two calls.
+    std::uint32_t total_rt = 0U;
+    const UBaseType_t n = uxTaskGetSystemState(gTaskStatusBuf, kMaxTaskCount, &total_rt);
+
+    std::uint32_t idle_rt = 0U;
+    for (UBaseType_t i = 0U; i < n; ++i) {
+        const char* nm = gTaskStatusBuf[i].pcTaskName;
+        if (nm[0]=='I' && nm[1]=='D' && nm[2]=='L' && nm[3]=='E' && nm[4]=='\0') {
+            idle_rt = gTaskStatusBuf[i].ulRunTimeCounter;
+            break;
+        }
+    }
+
+    const std::uint32_t delta_total = total_rt - sPrevTotalRt;
+    const std::uint32_t delta_idle  = idle_rt  - sPrevIdleRt;
+    sPrevTotalRt = total_rt;
+    sPrevIdleRt  = idle_rt;
+
+    std::uint16_t cpu_load_x10 = 0U;
+    if (delta_total > 100U) {
+        const std::uint32_t idle_pct =
+            (delta_idle >= delta_total) ? 100U : (delta_idle / (delta_total / 100U));
+        const std::uint32_t used_pct = (idle_pct >= 100U) ? 0U : (100U - idle_pct);
+        cpu_load_x10 = static_cast<std::uint16_t>(used_pct * 10U);
+    }
+
     PayloadTelemetryTick p = {};
     p.state             = static_cast<std::uint8_t>(sm.state());
-    p.cpu_load_x10      = 0U;
+    p.cpu_load_x10      = cpu_load_x10;
     p.stack_uart_rx     = static_cast<std::uint16_t>(uxTaskGetStackHighWaterMark(gUartRxHandle));
     p.stack_state_core  = static_cast<std::uint16_t>(uxTaskGetStackHighWaterMark(gSMHandle));
     p.stack_tel_tx      = static_cast<std::uint16_t>(uxTaskGetStackHighWaterMark(gTxHandle));
