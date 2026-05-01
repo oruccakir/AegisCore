@@ -49,6 +49,7 @@ constexpr std::uint32_t kSimulationSeed        = 0x12345678U;
 constexpr TickType_t    kSimulationPeriodTicks  = pdMS_TO_TICKS(100U);
 constexpr TickType_t    kHeartbeatPeriodTicks   = pdMS_TO_TICKS(1000U);
 constexpr TickType_t    kTelemetryPeriodTicks   = pdMS_TO_TICKS(1000U);
+constexpr TickType_t    kTaskListPeriodTicks    = pdMS_TO_TICKS(2000U);
 
 // ---- Queue item types -------------------------------------------------------
 
@@ -67,8 +68,34 @@ struct RemoteCmd
     std::uint8_t  payload_len;
 };
 
+// ---- User task infrastructure -----------------------------------------------
+
+enum class UserTaskType : std::uint8_t { Blink = 0U, Counter = 1U, Load = 2U };
+
+struct UserTaskSlot {
+    StaticTask_t  tcb;
+    StackType_t   stack[256U];
+    TaskHandle_t  handle;
+    UserTaskType  task_type;
+    std::uint8_t  param;
+    bool          in_use;
+};
+
+constexpr std::uint8_t kUserTaskSlots = 4U;
+constexpr UBaseType_t  kMaxTaskCount  = 9U; // 4 system + IDLE + 4 user
+
+UserTaskSlot  gUserTasks[kUserTaskSlots]       = {};
+TaskStatus_t  gTaskStatusBuf[kMaxTaskCount]    = {};
+
+static_assert(1U + kMaxTaskCount * sizeof(PackedTaskEntry) <= kAC2MaxPayload,
+              "task list payload overflows AC2 max payload");
+
 // ---- Static task allocations ------------------------------------------------
-StaticTask_t gUartRxTCB, gSMTaskTCB, gTxTaskTCB, gHbTaskTCB;
+StaticTask_t  gUartRxTCB, gSMTaskTCB, gTxTaskTCB, gHbTaskTCB;
+TaskHandle_t  gUartRxHandle    = nullptr;
+TaskHandle_t  gSMHandle        = nullptr;
+TaskHandle_t  gTxHandle        = nullptr;
+TaskHandle_t  gHbHandle        = nullptr;
 StackType_t  gUartRxStack[kStackUartRx];
 StackType_t  gSMStack[kStackStateMachine];
 StackType_t  gTxStack[kStackTelemetryTx];
@@ -100,6 +127,10 @@ std::uint32_t gVersionLedOffMs = 0U;
 
 // Yellow LED off time — set when ManualLock arrives, cleared by StateMachineTask.
 std::uint32_t gManualLockLedOffMs = 0U;
+
+// Shared blink state written by UserBlinkTask, read by StateMachineTask.
+// volatile bool is single-byte; Cortex-M4 byte stores/loads are atomic.
+volatile bool gUserBlinkState = false;
 
 // ---- Raw receive buffer for UartRxTask (avoid function-local static) --------
 std::uint8_t gUartRxBuf[kAC2MaxFrame] = {};
@@ -134,6 +165,105 @@ static void SendNack(std::uint32_t echoed_seq, std::uint8_t err) noexcept
     QueueTx(CmdId::kNack,
             reinterpret_cast<const std::uint8_t*>(&p),
             static_cast<std::uint8_t>(sizeof(p)));
+}
+
+// ---- User task functions ----------------------------------------------------
+
+void UserBlinkTask(void* ctx) noexcept
+{
+    const auto* slot = static_cast<const UserTaskSlot*>(ctx);
+    // param = half-period in units of 100 ms (default 5 → 500 ms half-period = 1 Hz)
+    const TickType_t half = pdMS_TO_TICKS(
+        static_cast<std::uint32_t>(slot->param > 0U ? slot->param : 5U) * 100U);
+    for (;;) {
+        gUserBlinkState = !gUserBlinkState;
+        vTaskDelay(half);
+    }
+}
+
+void UserCounterTask(void* /*ctx*/) noexcept
+{
+    for (;;) { vTaskDelay(pdMS_TO_TICKS(10U)); }
+}
+
+void UserLoadTask(void* ctx) noexcept
+{
+    const auto* slot = static_cast<const UserTaskSlot*>(ctx);
+    const std::uint32_t spin = static_cast<std::uint32_t>(slot->param) * 10000U;
+    for (;;) {
+        volatile std::uint32_t cnt = spin;
+        while (cnt > 0U) { cnt = cnt - 1U; }
+        vTaskDelay(pdMS_TO_TICKS(100U));
+    }
+}
+
+static std::int8_t CreateUserTask(std::uint8_t type, std::uint8_t param) noexcept
+{
+    for (std::uint8_t i = 0U; i < kUserTaskSlots; ++i) {
+        if (gUserTasks[i].in_use) { continue; }
+
+        gUserTasks[i].task_type = static_cast<UserTaskType>(type);
+        gUserTasks[i].param     = param;
+
+        TaskFunction_t fn = UserBlinkTask;
+        char tname[configMAX_TASK_NAME_LEN] = {};
+
+        switch (static_cast<UserTaskType>(type)) {
+            case UserTaskType::Blink:
+                fn       = UserBlinkTask;
+                tname[0] = 'B'; tname[1] = 'l'; tname[2] = 'n'; tname[3] = 'k';
+                tname[4] = static_cast<char>('0' + i);
+                break;
+            case UserTaskType::Counter:
+                fn       = UserCounterTask;
+                tname[0] = 'C'; tname[1] = 'n'; tname[2] = 't'; tname[3] = 'r';
+                tname[4] = static_cast<char>('0' + i);
+                break;
+            case UserTaskType::Load:
+                fn       = UserLoadTask;
+                tname[0] = 'L'; tname[1] = 'o'; tname[2] = 'a'; tname[3] = 'd';
+                tname[4] = static_cast<char>('0' + i);
+                break;
+            default:
+                return -1;
+        }
+
+        const std::uint32_t depth =
+            static_cast<std::uint32_t>(sizeof(gUserTasks[i].stack) / sizeof(StackType_t));
+        gUserTasks[i].handle = xTaskCreateStatic(
+            fn, tname, depth, &gUserTasks[i], 1U,
+            gUserTasks[i].stack, &gUserTasks[i].tcb);
+
+        if (gUserTasks[i].handle == nullptr) { return -1; }
+        gUserTasks[i].in_use = true;
+        return static_cast<std::int8_t>(i);
+    }
+    return -1;
+}
+
+static bool DeleteUserTask(std::uint8_t slot_index) noexcept
+{
+    if (slot_index >= kUserTaskSlots)   { return false; }
+    if (!gUserTasks[slot_index].in_use) { return false; }
+
+    vTaskDelete(gUserTasks[slot_index].handle);
+    gUserTasks[slot_index].handle = nullptr;
+    gUserTasks[slot_index].in_use = false;
+
+    // If no other Blink task is running, release the shared LED flag.
+    if (gUserTasks[slot_index].task_type == UserTaskType::Blink) {
+        bool any_blink = false;
+        for (std::uint8_t s = 0U; s < kUserTaskSlots; ++s) {
+            if (gUserTasks[s].in_use &&
+                gUserTasks[s].task_type == UserTaskType::Blink) {
+                any_blink = true;
+                break;
+            }
+        }
+        if (!any_blink) { gUserBlinkState = false; }
+    }
+
+    return true;
 }
 
 // ---- AC2 parser callback (UartRxTask context) -------------------------------
@@ -203,6 +333,8 @@ static void OnAC2Frame(const AC2Frame& frame, void* /*ctx*/) noexcept
     (void)xQueueSend(gRemoteCmdQueue, &rcmd, 0U);
 }
 
+static void QueueTaskList() noexcept; // forward declaration — defined in telemetry helpers
+
 // ---- Remote-command dispatcher (StateMachineTask context) -------------------
 
 static void DispatchRemoteCmd(StateMachine& sm,
@@ -266,6 +398,33 @@ static void DispatchRemoteCmd(StateMachine& sm,
         }
         break;
 
+    case CmdId::kCreateTask: {
+        if (rcmd.payload_len < static_cast<std::uint8_t>(sizeof(PayloadCreateTask))) {
+            SendNack(rcmd.seq, ErrCode::kInvalidPayload);
+            break;
+        }
+        const std::int8_t slot =
+            CreateUserTask(rcmd.payload[0U], rcmd.payload[1U]);
+        if (slot < 0) { SendNack(rcmd.seq, ErrCode::kBusy); break; }
+        SendAck(rcmd.seq);
+        QueueTaskList();
+        break;
+    }
+
+    case CmdId::kDeleteTask: {
+        if (rcmd.payload_len < static_cast<std::uint8_t>(sizeof(PayloadDeleteTask))) {
+            SendNack(rcmd.seq, ErrCode::kInvalidPayload);
+            break;
+        }
+        if (!DeleteUserTask(rcmd.payload[0U])) {
+            SendNack(rcmd.seq, ErrCode::kInvalidCmd);
+            break;
+        }
+        SendAck(rcmd.seq);
+        QueueTaskList();
+        break;
+    }
+
     default:
         SendNack(rcmd.seq, ErrCode::kInvalidCmd);
         break;
@@ -274,15 +433,58 @@ static void DispatchRemoteCmd(StateMachine& sm,
 
 // ---- Telemetry helpers ------------------------------------------------------
 
+static void QueueTaskList() noexcept
+{
+    std::uint32_t total_rt = 0U;
+    const UBaseType_t n = uxTaskGetSystemState(gTaskStatusBuf, kMaxTaskCount, &total_rt);
+    const std::uint8_t count =
+        static_cast<std::uint8_t>(n > kMaxTaskCount ? kMaxTaskCount : n);
+
+    constexpr std::uint8_t kEntry =
+        static_cast<std::uint8_t>(sizeof(PackedTaskEntry));
+    std::uint8_t payload[1U + kMaxTaskCount * sizeof(PackedTaskEntry)] = {};
+    payload[0] = count;
+
+    for (std::uint8_t i = 0U; i < count; ++i) {
+        const TaskStatus_t& src = gTaskStatusBuf[i];
+        PackedTaskEntry entry   = {};
+
+        for (std::uint8_t c = 0U; c < 7U && src.pcTaskName[c] != '\0'; ++c) {
+            entry.name[c] = src.pcTaskName[c];
+        }
+        entry.state           = static_cast<std::uint8_t>(src.eCurrentState);
+        entry.priority        = static_cast<std::uint8_t>(src.uxCurrentPriority);
+        entry.stack_watermark = static_cast<std::uint16_t>(src.usStackHighWaterMark);
+        if (total_rt > 100U) {
+            const std::uint32_t pct = src.ulRunTimeCounter / (total_rt / 100U);
+            entry.cpu_load = static_cast<std::uint8_t>(pct > 100U ? 100U : pct);
+        }
+        for (std::uint8_t s = 0U; s < kUserTaskSlots; ++s) {
+            if (gUserTasks[s].in_use && gUserTasks[s].handle == src.xHandle) {
+                entry.task_id = static_cast<std::uint8_t>(0x80U | s);
+                break;
+            }
+        }
+
+        const auto* eb = reinterpret_cast<const std::uint8_t*>(&entry);
+        const std::uint8_t off = static_cast<std::uint8_t>(1U + i * kEntry);
+        for (std::uint8_t b = 0U; b < kEntry; ++b) { payload[off + b] = eb[b]; }
+    }
+
+    const std::uint8_t plen = static_cast<std::uint8_t>(1U + count * kEntry);
+    QueueTx(CmdId::kTaskList, payload, plen);
+}
+
 static void QueueTelemetryTick(const StateMachine& sm) noexcept
 {
     PayloadTelemetryTick p = {};
-    p.state                = static_cast<std::uint8_t>(sm.state());
-    p.cpu_load_x10         = 0U;
-    p.free_stack_min_words = static_cast<std::uint16_t>(
-        uxTaskGetStackHighWaterMark(nullptr));
-    p.hb_miss_count        =
-        FailSafeSupervisor::Instance().HeartbeatMissCount();
+    p.state             = static_cast<std::uint8_t>(sm.state());
+    p.cpu_load_x10      = 0U;
+    p.stack_uart_rx     = static_cast<std::uint16_t>(uxTaskGetStackHighWaterMark(gUartRxHandle));
+    p.stack_state_core  = static_cast<std::uint16_t>(uxTaskGetStackHighWaterMark(gSMHandle));
+    p.stack_tel_tx      = static_cast<std::uint16_t>(uxTaskGetStackHighWaterMark(gTxHandle));
+    p.stack_heartbeat   = static_cast<std::uint16_t>(uxTaskGetStackHighWaterMark(gHbHandle));
+    p.hb_miss_count     = FailSafeSupervisor::Instance().HeartbeatMissCount();
     QueueTx(CmdId::kTelemetryTick,
             reinterpret_cast<const std::uint8_t*>(&p),
             static_cast<std::uint8_t>(sizeof(p)));
@@ -332,6 +534,7 @@ void StateMachineTask(void* /*ctx*/)
 
     TickType_t next_sim_tick       = xTaskGetTickCount() + kSimulationPeriodTicks;
     TickType_t next_telemetry_tick = xTaskGetTickCount() + kTelemetryPeriodTicks;
+    TickType_t next_tasklist_tick  = xTaskGetTickCount() + kTaskListPeriodTicks;
 
     ApplyLedOutputs(sm.GetLedOutputs(MillisecondsSinceBoot()));
 
@@ -384,10 +587,17 @@ void StateMachineTask(void* /*ctx*/)
             QueueTelemetryTick(sm);
         }
 
+        if (xTaskGetTickCount() >= next_tasklist_tick)
+        {
+            next_tasklist_tick = next_tasklist_tick + kTaskListPeriodTicks;
+            QueueTaskList();
+        }
+
         const std::uint32_t now_led = MillisecondsSinceBoot();
         LedOutputs leds = sm.GetLedOutputs(now_led);
-        leds.blue_on = (gVersionLedOffMs != 0U && now_led < gVersionLedOffMs);
-        leds.yellow_on = (gManualLockLedOffMs != 0U && now_led < gManualLockLedOffMs);
+        leds.blue_on   = (gVersionLedOffMs    != 0U && now_led < gVersionLedOffMs);
+        leds.yellow_on = (gManualLockLedOffMs != 0U && now_led < gManualLockLedOffMs)
+                         || static_cast<bool>(gUserBlinkState);
         ApplyLedOutputs(leds);
     }
 }
@@ -476,21 +686,21 @@ extern "C" int main()
 
     aegis::edge::SetButtonEdgeCallback(OnButtonEdge, gButtonQueue);
 
-    configASSERT(xTaskCreateStatic(UartRxTask, "UartRx",
-        kStackUartRx, nullptr, kPrioUartRx,
-        gUartRxStack, &gUartRxTCB) != nullptr);
+    gUartRxHandle = xTaskCreateStatic(UartRxTask, "UartRx",
+        kStackUartRx, nullptr, kPrioUartRx, gUartRxStack, &gUartRxTCB);
+    configASSERT(gUartRxHandle != nullptr);
 
-    configASSERT(xTaskCreateStatic(StateMachineTask, "StateCore",
-        kStackStateMachine, nullptr, kPrioStateMachine,
-        gSMStack, &gSMTaskTCB) != nullptr);
+    gSMHandle = xTaskCreateStatic(StateMachineTask, "StateCore",
+        kStackStateMachine, nullptr, kPrioStateMachine, gSMStack, &gSMTaskTCB);
+    configASSERT(gSMHandle != nullptr);
 
-    configASSERT(xTaskCreateStatic(TelemetryTxTask, "TelTx",
-        kStackTelemetryTx, nullptr, kPrioTelemetryTx,
-        gTxStack, &gTxTaskTCB) != nullptr);
+    gTxHandle = xTaskCreateStatic(TelemetryTxTask, "TelTx",
+        kStackTelemetryTx, nullptr, kPrioTelemetryTx, gTxStack, &gTxTaskTCB);
+    configASSERT(gTxHandle != nullptr);
 
-    configASSERT(xTaskCreateStatic(HeartbeatTask, "Heartbeat",
-        kStackHeartbeat, nullptr, kPrioHeartbeat,
-        gHbStack, &gHbTaskTCB) != nullptr);
+    gHbHandle = xTaskCreateStatic(HeartbeatTask, "Heartbeat",
+        kStackHeartbeat, nullptr, kPrioHeartbeat, gHbStack, &gHbTaskTCB);
+    configASSERT(gHbHandle != nullptr);
 
     vTaskStartScheduler();
 

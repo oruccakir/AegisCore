@@ -30,11 +30,24 @@ export const CmdHeartbeatSchema = z.object({
   type: z.literal('cmd.heartbeat'),
 });
 
+export const CmdCreateTaskSchema = z.object({
+  type:      z.literal('cmd.create_task'),
+  task_type: z.number().int().min(0).max(2), // 0=BLINK, 1=COUNTER, 2=LOAD
+  param:     z.number().int().min(0).max(255),
+});
+
+export const CmdDeleteTaskSchema = z.object({
+  type:       z.literal('cmd.delete_task'),
+  slot_index: z.number().int().min(0).max(3),
+});
+
 export const InboundCmdSchema = z.discriminatedUnion('type', [
   CmdSetStateSchema,
   CmdManualLockSchema,
   CmdGetVersionSchema,
   CmdHeartbeatSchema,
+  CmdCreateTaskSchema,
+  CmdDeleteTaskSchema,
 ]);
 export type InboundCmd = z.infer<typeof InboundCmdSchema>;
 
@@ -51,7 +64,10 @@ export interface EvtTelemetry {
   type:               'evt.telemetry';
   state:              number;
   cpu_load_x10:       number;
-  free_stack_min_words: number;
+  stack_uart_rx:      number;
+  stack_state_core:   number;
+  stack_tel_tx:       number;
+  stack_heartbeat:    number;
   hb_miss_count:      number;
 }
 
@@ -92,6 +108,20 @@ export interface EvtError {
   message: string;
 }
 
+export interface PackedTaskEntry {
+  name:            string;
+  state:           number;
+  priority:        number;
+  stack_watermark: number;
+  cpu_load:        number;
+  task_id:         number; // bit7=1 → user task, bits[2:0] = slot index
+}
+
+export interface EvtTaskList {
+  type:  'evt.task_list';
+  tasks: PackedTaskEntry[];
+}
+
 export type OutboundEvent =
   | EvtReportState
   | EvtTelemetry
@@ -100,7 +130,8 @@ export type OutboundEvent =
   | EvtVersionReport
   | EvtNack
   | EvtAck
-  | EvtError;
+  | EvtError
+  | EvtTaskList;
 
 /** Wrap an event in the standard envelope. */
 export function envelope(seq: number, event: OutboundEvent): WsEnvelope {

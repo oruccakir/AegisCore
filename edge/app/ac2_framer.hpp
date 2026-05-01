@@ -7,8 +7,8 @@ namespace aegis::edge {
 
 inline constexpr std::uint8_t kAC2Sync        = 0xAAU;
 inline constexpr std::uint8_t kAC2Version     = 0x02U;
-inline constexpr std::uint8_t kAC2MaxPayload  = 48U;
-inline constexpr std::uint8_t kAC2MaxFrame    = 66U; // 18-byte overhead + 48 payload
+inline constexpr std::uint8_t kAC2MaxPayload  = 128U;
+inline constexpr std::uint8_t kAC2MaxFrame    = 146U; // 18-byte overhead + 128 payload
 inline constexpr std::uint8_t kAC2HmacLen     = 8U;
 inline constexpr std::uint8_t kAC2HeaderLen   = 8U;  // SYNC+VER+SEQ(4)+LEN+CMD
 inline constexpr std::uint8_t kAC2OverheadLen = 18U; // header + HMAC + CRC

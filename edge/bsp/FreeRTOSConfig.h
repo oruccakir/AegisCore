@@ -23,6 +23,18 @@ extern uint32_t SystemCoreClock;
 #define configUSE_APPLICATION_TASK_TAG          0
 #define configUSE_COUNTING_SEMAPHORES           0
 #define configUSE_TRACE_FACILITY                1   /* for uxTaskGetSystemState */
+#define configGENERATE_RUN_TIME_STATS           1
+/* DWT cycle counter as run-time stats clock (1 tick = 1 cycle @ 168 MHz).
+   Raw addresses used so this header compiles in C translation units that
+   do not include the CMSIS core_cm4.h device header (e.g. FreeRTOS tasks.c). */
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() \
+    do { \
+        *((volatile uint32_t*)0xE000EDFC) |= (1UL << 24); \
+        *((volatile uint32_t*)0xE0001004)  = 0U; \
+        *((volatile uint32_t*)0xE0001000) |= 1UL; \
+    } while(0)
+#define portGET_RUN_TIME_COUNTER_VALUE() \
+    (*((volatile uint32_t*)0xE0001004) / 168U)
 #define configUSE_TICKLESS_IDLE                 0
 #define configUSE_TIMERS                        0
 #define configSUPPORT_DYNAMIC_ALLOCATION        0
@@ -57,7 +69,7 @@ void vAssertCalled(const char* file, int line);
 
 #define INCLUDE_vTaskPrioritySet                0
 #define INCLUDE_uxTaskPriorityGet               0
-#define INCLUDE_vTaskDelete                     0
+#define INCLUDE_vTaskDelete                     1
 #define INCLUDE_vTaskSuspend                    0
 #define INCLUDE_xResumeFromISR                  0
 #define INCLUDE_vTaskDelayUntil                 1

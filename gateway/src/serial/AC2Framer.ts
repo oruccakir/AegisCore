@@ -1,15 +1,15 @@
 // AC2 frame format (IRS §3.1):
-// SYNC(0xAA) | VER(0x02) | SEQ[4 LE] | LEN[1] | CMD[1] | PAYLOAD[0-48] | HMAC[8] | CRC[2 LE]
-// Total overhead = 18 bytes; max frame = 66 bytes.
+// SYNC(0xAA) | VER(0x02) | SEQ[4 LE] | LEN[1] | CMD[1] | PAYLOAD[0-128] | HMAC[8] | CRC[2 LE]
+// Total overhead = 18 bytes; max frame = 146 bytes.
 
 import { crc16 }  from './Crc16.js';
 import { hmac8 }  from './Hmac.js';
 
 export const SYNC    = 0xaa;
 export const VERSION = 0x02;
-export const MAX_PAYLOAD = 48;
+export const MAX_PAYLOAD = 128;
 export const OVERHEAD    = 18; // 1+1+4+1+1+8+2
-export const MAX_FRAME   = OVERHEAD + MAX_PAYLOAD; // 66
+export const MAX_FRAME   = OVERHEAD + MAX_PAYLOAD; // 146
 
 export const CmdId = {
   GetVersion:    0x01,
@@ -19,8 +19,11 @@ export const CmdId = {
   ResetAck:      0x12,
   ReportState:   0x20,
   TelemetryTick: 0x21,
+  TaskList:      0x22,
   FaultReport:   0x30,
   AuditEvent:    0x31,
+  CreateTask:    0x50,
+  DeleteTask:    0x51,
   Ack:           0x80,
   Nack:          0x81,
   Heartbeat:     0x99,
@@ -64,7 +67,7 @@ export function encodeCommand(
   seq: number,
   psk: Buffer,
 ): Buffer {
-  if (payload.length > MAX_PAYLOAD) throw new RangeError('payload exceeds 48 bytes');
+  if (payload.length > MAX_PAYLOAD) throw new RangeError(`payload exceeds ${MAX_PAYLOAD} bytes`);
   const frameLen = OVERHEAD + payload.length;
   const buf = Buffer.allocUnsafe(frameLen);
   let pos = 0;
@@ -89,7 +92,7 @@ export function encodeTelemetry(
   payload: Uint8Array,
   seq: number,
 ): Buffer {
-  if (payload.length > MAX_PAYLOAD) throw new RangeError('payload exceeds 48 bytes');
+  if (payload.length > MAX_PAYLOAD) throw new RangeError(`payload exceeds ${MAX_PAYLOAD} bytes`);
   const frameLen = OVERHEAD + payload.length;
   const buf = Buffer.allocUnsafe(frameLen);
   let pos = 0;

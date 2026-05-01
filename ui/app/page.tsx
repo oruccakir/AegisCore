@@ -2,6 +2,7 @@
 import { useAC2Socket } from '@/hooks/useAC2Socket';
 import RadarDisplay from '@/components/RadarDisplay';
 import EventLog from '@/components/EventLog';
+import TaskMonitor from '@/components/TaskMonitor';
 import styles from './page.module.css';
 
 const STATE_NAMES  = ['IDLE', 'SEARCH', 'TRACK', 'FAIL_SAFE'];
@@ -30,7 +31,7 @@ function ConnDot({ status }: { status: string }) {
 }
 
 export default function Dashboard() {
-  const { status, telemetry, sysInfo, log, send } = useAC2Socket('ws://localhost:8443');
+  const { status, telemetry, sysInfo, log, tasks, send } = useAC2Socket('ws://localhost:8443');
 
   const state     = telemetry?.state ?? 0;
   const stateColor = STATE_COLORS[state] ?? '#4a8a54';
@@ -98,7 +99,7 @@ export default function Dashboard() {
             <div className={styles.metrics}>
               <Metric label="UPTIME"      value={fmtUptime(sysInfo.uptime_ms)} />
               <Metric label="CPU LOAD"    value={telemetry ? `${(telemetry.cpu_load_x10 / 10).toFixed(1)}%` : '—'} />
-              <Metric label="STACK FREE"  value={telemetry ? `${telemetry.free_stack_min_words}w` : '—'} />
+              <Metric label="STACK MIN"   value={telemetry ? `${Math.min(telemetry.stack_uart_rx, telemetry.stack_state_core, telemetry.stack_tel_tx, telemetry.stack_heartbeat)}w` : '—'} />
               <Metric label="HB MISS"
                 value={telemetry ? String(telemetry.hb_miss_count) : '—'}
                 warn={(telemetry?.hb_miss_count ?? 0) > 0} />
@@ -137,6 +138,9 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
+
+          {/* TASK MONITOR */}
+          <TaskMonitor tasks={tasks} send={send} />
 
           {/* FAIL-SAFE BANNER */}
           {isFailSafe && (

@@ -6,7 +6,10 @@ export type ConnStatus = 'connecting' | 'connected' | 'disconnected';
 export interface Telemetry {
   state: number;
   cpu_load_x10: number;
-  free_stack_min_words: number;
+  stack_uart_rx: number;
+  stack_state_core: number;
+  stack_tel_tx: number;
+  stack_heartbeat: number;
   hb_miss_count: number;
 }
 
@@ -24,11 +27,22 @@ export interface LogEntry {
   level: 'info' | 'warn' | 'error' | 'ok';
 }
 
+export interface TaskInfo {
+  name:            string;
+  state:           number;
+  priority:        number;
+  stack_watermark: number;
+  cpu_load:        number;
+  task_id:         number; // bit7=1 → user task, bits[2:0] = slot index
+}
+
 export type OutCmd =
   | { type: 'cmd.set_state'; targetState: 'idle' | 'search' | 'track' | 'fail_safe' }
   | { type: 'cmd.manual_lock'; lock: boolean }
   | { type: 'cmd.get_version' }
-  | { type: 'cmd.heartbeat' };
+  | { type: 'cmd.heartbeat' }
+  | { type: 'cmd.create_task'; task_type: 0 | 1 | 2; param: number }
+  | { type: 'cmd.delete_task'; slot_index: number };
 
 const ERR_CODES: Record<number, string> = {
   1: 'INVALID_CMD', 2: 'INVALID_PAYLOAD', 3: 'INVALID_TRANSITION',
@@ -48,6 +62,7 @@ export function useAC2Socket(url: string) {
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
   const [sysInfo,   setSysInfo]   = useState<SystemInfo>({ uptime_ms: 0 });
   const [log,       setLog]       = useState<LogEntry[]>([]);
+  const [tasks,     setTasks]     = useState<TaskInfo[]>([]);
 
   const addLog = useCallback((type: string, text: string, level: LogEntry['level'] = 'info') => {
     setLog(prev => {
@@ -86,10 +101,13 @@ export function useAC2Socket(url: string) {
         switch (d.type) {
           case 'evt.telemetry':
             setTelemetry({
-              state: d.state,
-              cpu_load_x10: d.cpu_load_x10,
-              free_stack_min_words: d.free_stack_min_words,
-              hb_miss_count: d.hb_miss_count,
+              state:            d.state,
+              cpu_load_x10:     d.cpu_load_x10,
+              stack_uart_rx:    d.stack_uart_rx,
+              stack_state_core: d.stack_state_core,
+              stack_tel_tx:     d.stack_tel_tx,
+              stack_heartbeat:  d.stack_heartbeat,
+              hb_miss_count:    d.hb_miss_count,
             });
             break;
 
@@ -127,6 +145,10 @@ export function useAC2Socket(url: string) {
               `code=${d.fault_code} ctx=0x${d.ctx.toString(16)} rst=0x${d.reset_reason_bits.toString(16)}`,
               'error');
             break;
+
+          case 'evt.task_list':
+            setTasks(d.tasks as TaskInfo[]);
+            break;
         }
       } catch {
         // ignore malformed
@@ -149,5 +171,5 @@ export function useAC2Socket(url: string) {
     }
   }, []);
 
-  return { status, telemetry, sysInfo, log, send };
+  return { status, telemetry, sysInfo, log, tasks, send };
 }

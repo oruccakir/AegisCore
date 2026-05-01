@@ -79,13 +79,39 @@ export class Bridge {
 
       case CmdId.TelemetryTick:
         this.ws.broadcast({
-          type:                 'evt.telemetry',
-          state:                frame.payload[0] ?? 0,
-          cpu_load_x10:         frame.payload.readUInt16LE(1),
-          free_stack_min_words: frame.payload.readUInt16LE(3),
-          hb_miss_count:        frame.payload[5] ?? 0,
+          type:             'evt.telemetry',
+          state:            frame.payload[0] ?? 0,
+          cpu_load_x10:     frame.payload.readUInt16LE(1),
+          stack_uart_rx:    frame.payload.readUInt16LE(3),
+          stack_state_core: frame.payload.readUInt16LE(5),
+          stack_tel_tx:     frame.payload.readUInt16LE(7),
+          stack_heartbeat:  frame.payload.readUInt16LE(9),
+          hb_miss_count:    frame.payload[11] ?? 0,
         });
         break;
+
+      case CmdId.TaskList: {
+        const count = frame.payload[0] ?? 0;
+        const ENTRY = 14;
+        const tasks = [];
+        for (let i = 0; i < count; i++) {
+          const off = 1 + i * ENTRY;
+          if (off + ENTRY > frame.payload.length) break;
+          const nameBytes = frame.payload.subarray(off, off + 8);
+          const nullIdx = nameBytes.indexOf(0);
+          const name = nameBytes.subarray(0, nullIdx < 0 ? 8 : nullIdx).toString('ascii');
+          tasks.push({
+            name,
+            state:           frame.payload[off + 8]  ?? 0,
+            priority:        frame.payload[off + 9]  ?? 0,
+            stack_watermark: frame.payload.readUInt16LE(off + 10),
+            cpu_load:        frame.payload[off + 12] ?? 0,
+            task_id:         frame.payload[off + 13] ?? 0,
+          });
+        }
+        this.ws.broadcast({ type: 'evt.task_list', tasks });
+        break;
+      }
 
       case CmdId.FaultReport:
         this.ws.broadcast({
@@ -158,6 +184,21 @@ export class Bridge {
       case 'cmd.heartbeat':
         this.sendHeartbeat();
         break;
+
+      case 'cmd.create_task': {
+        const payload = Buffer.alloc(2);
+        payload[0] = cmd.task_type;
+        payload[1] = cmd.param;
+        this.serial.write(encodeCommand(CmdId.CreateTask, payload, this.txSeq++, this.psk));
+        break;
+      }
+
+      case 'cmd.delete_task': {
+        const payload = Buffer.alloc(1);
+        payload[0] = cmd.slot_index;
+        this.serial.write(encodeCommand(CmdId.DeleteTask, payload, this.txSeq++, this.psk));
+        break;
+      }
     }
   }
 

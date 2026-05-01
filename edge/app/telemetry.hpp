@@ -16,6 +16,9 @@ namespace CmdId {
     inline constexpr std::uint8_t kResetAck       = 0x12U;
     inline constexpr std::uint8_t kReportState    = 0x20U;
     inline constexpr std::uint8_t kTelemetryTick  = 0x21U;
+    inline constexpr std::uint8_t kTaskList       = 0x22U;
+    inline constexpr std::uint8_t kCreateTask     = 0x50U;
+    inline constexpr std::uint8_t kDeleteTask     = 0x51U;
     inline constexpr std::uint8_t kFaultReport    = 0x30U;
     inline constexpr std::uint8_t kAuditEvent     = 0x31U;
     inline constexpr std::uint8_t kAck            = 0x80U;
@@ -59,11 +62,14 @@ static_assert(sizeof(PayloadReportState) == 6U);
 struct __attribute__((packed)) PayloadTelemetryTick
 {
     std::uint8_t  state;
-    std::uint16_t cpu_load_x10;      // CPU usage * 10 (e.g. 153 = 15.3 %)
-    std::uint16_t free_stack_min_words;
+    std::uint16_t cpu_load_x10;          // CPU usage * 10 (e.g. 153 = 15.3 %)
+    std::uint16_t stack_uart_rx;         // free words — UartRx task
+    std::uint16_t stack_state_core;      // free words — StateCore task
+    std::uint16_t stack_tel_tx;          // free words — TelTx task
+    std::uint16_t stack_heartbeat;       // free words — Heartbeat task
     std::uint8_t  hb_miss_count;
 };
-static_assert(sizeof(PayloadTelemetryTick) == 6U);
+static_assert(sizeof(PayloadTelemetryTick) == 12U);
 
 struct __attribute__((packed)) PayloadFaultReport
 {
@@ -101,6 +107,31 @@ struct __attribute__((packed)) PayloadNack
     std::uint8_t  err_code;
 };
 static_assert(sizeof(PayloadNack) == 5U);
+
+// Per-task entry packed into kTaskList frames (14 bytes, 9 entries fit in 127 ≤ 128 bytes).
+struct __attribute__((packed)) PackedTaskEntry
+{
+    char          name[8];
+    std::uint8_t  state;           // eTaskState value
+    std::uint8_t  priority;
+    std::uint16_t stack_watermark; // high-water-mark in words
+    std::uint8_t  cpu_load;        // 0–100 percent
+    std::uint8_t  task_id;         // bit7=1 → user task, bits[2:0] = slot index
+};
+static_assert(sizeof(PackedTaskEntry) == 14U);
+
+struct __attribute__((packed)) PayloadCreateTask
+{
+    std::uint8_t task_type; // 0=BLINK, 1=COUNTER, 2=LOAD
+    std::uint8_t param;
+};
+static_assert(sizeof(PayloadCreateTask) == 2U);
+
+struct __attribute__((packed)) PayloadDeleteTask
+{
+    std::uint8_t slot_index;
+};
+static_assert(sizeof(PayloadDeleteTask) == 1U);
 
 } // namespace aegis::edge
 

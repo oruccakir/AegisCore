@@ -1,0 +1,155 @@
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+
+.title {
+  font-family: var(--display);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.empty {
+  font-size: 10px;
+  color: var(--text-faint);
+  padding: 6px 0;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.name {
+  min-width: 64px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.prio {
+  font-size: 9px;
+  font-family: var(--display);
+  letter-spacing: 0.05em;
+  min-width: 18px;
+}
+
+.stateTag {
+  font-size: 8px;
+  font-family: var(--display);
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  min-width: 44px;
+}
+
+.cpu {
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--text-dim);
+  min-width: 28px;
+  text-align: right;
+}
+
+.free {
+  margin-left: auto;
+  font-size: 9px;
+  font-family: var(--mono);
+}
+
+.delBtn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--red);
+  font-size: 8px;
+  padding: 0 4px;
+  cursor: pointer;
+  line-height: 14px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.delBtn:hover { opacity: 1; }
+
+.track {
+  height: 3px;
+  background: var(--bg-card);
+  border-radius: 2px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0 8px;
+}
+
+.createRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.select {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.paramInput {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 6px;
+  width: 48px;
+  text-align: center;
+}
+
+.addBtn {
+  background: none;
+  border: 1px solid var(--green);
+  border-radius: 3px;
+  color: var(--green);
+  font-family: var(--display);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.addBtn:hover {
+  background: var(--green);
+  color: var(--bg);
+}
