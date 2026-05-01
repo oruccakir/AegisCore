@@ -6,8 +6,10 @@ namespace {
 
 using aegis::edge::LedOutputs;
 
-constexpr std::uint16_t kGreenLedPin = GPIO_PIN_12;
-constexpr std::uint16_t kRedLedPin = GPIO_PIN_14;
+constexpr std::uint32_t kYellowLedPin = GPIO_PIN_13;
+constexpr std::uint16_t kGreenLedPin  = GPIO_PIN_12;
+constexpr std::uint16_t kBlueLedPin   = GPIO_PIN_15;
+constexpr std::uint16_t kRedLedPin    = GPIO_PIN_14;
 constexpr std::uint16_t kUserButtonPin = GPIO_PIN_0;
 constexpr std::uint32_t kButtonIrqPriority = 6U;
 
@@ -63,13 +65,13 @@ void GpioInit()
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
     GPIO_InitTypeDef gpio = {};
-    gpio.Pin = kGreenLedPin | kRedLedPin;
+    gpio.Pin = kGreenLedPin | kBlueLedPin | kRedLedPin | kYellowLedPin;
     gpio.Mode = GPIO_MODE_OUTPUT_PP;
     gpio.Pull = GPIO_NOPULL;
     gpio.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(kLedPort, &gpio);
 
-    HAL_GPIO_WritePin(kLedPort, kGreenLedPin | kRedLedPin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(kLedPort, kGreenLedPin | kBlueLedPin | kRedLedPin | kYellowLedPin, GPIO_PIN_RESET);
 
     gpio = {};
     gpio.Pin = kUserButtonPin;
@@ -94,6 +96,10 @@ void ApplyLedOutputs(const LedOutputs& outputs)
                       outputs.green_on ? GPIO_PIN_SET : GPIO_PIN_RESET);
     HAL_GPIO_WritePin(kLedPort, kRedLedPin,
                       outputs.red_on ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(kLedPort, kBlueLedPin,
+                      outputs.blue_on ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(kLedPort, kYellowLedPin,
+                      outputs.yellow_on ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 void InitializePlatform()

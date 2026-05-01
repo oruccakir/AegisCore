@@ -95,6 +95,12 @@ RateLimiter gRateLimiter;
 // TX sequence number — only TelemetryTxTask writes this.
 std::uint32_t gTxSeq = 0U;
 
+// Blue LED off time — set when GetVersion arrives, cleared by StateMachineTask.
+std::uint32_t gVersionLedOffMs = 0U;
+
+// Yellow LED off time — set when ManualLock arrives, cleared by StateMachineTask.
+std::uint32_t gManualLockLedOffMs = 0U;
+
 // ---- Raw receive buffer for UartRxTask (avoid function-local static) --------
 std::uint8_t gUartRxBuf[kAC2MaxFrame] = {};
 
@@ -234,6 +240,7 @@ static void DispatchRemoteCmd(StateMachine& sm,
         break;
 
     case CmdId::kManualLock:
+        gManualLockLedOffMs = MillisecondsSinceBoot() + 1000U;
         sm.ForceFailSafe(now_ms);
         FailSafeSupervisor::Instance().ReportEvent(FailSafeEvent::ExternalTrigger);
         SendAck(rcmd.seq);
@@ -241,6 +248,8 @@ static void DispatchRemoteCmd(StateMachine& sm,
 
     case CmdId::kGetVersion:
         {
+            gVersionLedOffMs = MillisecondsSinceBoot() + 1000U;
+
             PayloadVersionReport vr = {};
             vr.major    = kVersionMajor;
             vr.minor    = kVersionMinor;
@@ -375,7 +384,11 @@ void StateMachineTask(void* /*ctx*/)
             QueueTelemetryTick(sm);
         }
 
-        ApplyLedOutputs(sm.GetLedOutputs(MillisecondsSinceBoot()));
+        const std::uint32_t now_led = MillisecondsSinceBoot();
+        LedOutputs leds = sm.GetLedOutputs(now_led);
+        leds.blue_on = (gVersionLedOffMs != 0U && now_led < gVersionLedOffMs);
+        leds.yellow_on = (gManualLockLedOffMs != 0U && now_led < gManualLockLedOffMs);
+        ApplyLedOutputs(leds);
     }
 }
 

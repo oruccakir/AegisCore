@@ -31,6 +31,8 @@ struct LedOutputs
 {
     bool green_on;
     bool red_on;
+    bool blue_on = false;
+    bool yellow_on = false;
 };
 
 enum class RawButtonEdgeType : std::uint8_t
