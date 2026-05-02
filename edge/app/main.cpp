@@ -75,8 +75,6 @@ struct RemoteCmd
 
 enum class UserTaskType : std::uint8_t {
     Blink = 0U,
-    Counter = 1U,
-    Load = 2U,
     RangeScan = 3U
 };
 
@@ -217,22 +215,6 @@ void UserBlinkTask(void* ctx) noexcept
     }
 }
 
-void UserCounterTask(void* /*ctx*/) noexcept
-{
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(10U)); }
-}
-
-void UserLoadTask(void* ctx) noexcept
-{
-    const auto* slot = static_cast<const UserTaskSlot*>(ctx);
-    const std::uint32_t spin = static_cast<std::uint32_t>(slot->param) * 10000U;
-    for (;;) {
-        volatile std::uint32_t cnt = spin;
-        while (cnt > 0U) { cnt = cnt - 1U; }
-        vTaskDelay(pdMS_TO_TICKS(100U));
-    }
-}
-
 void UserRangeScanTask(void* ctx) noexcept
 {
     const auto* slot = static_cast<const UserTaskSlot*>(ctx);
@@ -330,16 +312,6 @@ static std::int8_t CreateUserTask(std::uint8_t type, std::uint8_t param) noexcep
             case UserTaskType::Blink:
                 fn       = UserBlinkTask;
                 tname[0] = 'B'; tname[1] = 'l'; tname[2] = 'n'; tname[3] = 'k';
-                tname[4] = static_cast<char>('0' + i);
-                break;
-            case UserTaskType::Counter:
-                fn       = UserCounterTask;
-                tname[0] = 'C'; tname[1] = 'n'; tname[2] = 't'; tname[3] = 'r';
-                tname[4] = static_cast<char>('0' + i);
-                break;
-            case UserTaskType::Load:
-                fn       = UserLoadTask;
-                tname[0] = 'L'; tname[1] = 'o'; tname[2] = 'a'; tname[3] = 'd';
                 tname[4] = static_cast<char>('0' + i);
                 break;
             case UserTaskType::RangeScan:

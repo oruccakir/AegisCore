@@ -87,7 +87,7 @@ Priority 5: UartRx
 Priority 4: StateCore
 Priority 3: TelTx
 Priority 2: Heartbeat
-Priority 1: User tasks such as Blink, Counter, Load, RangeScan
+Priority 1: User tasks such as Blink and RangeScan
 Priority 0: Idle task
 ```
 
@@ -181,13 +181,11 @@ The current user task enum is:
 ```cpp
 enum class UserTaskType : std::uint8_t {
     Blink     = 0U,
-    Counter   = 1U,
-    Load      = 2U,
     RangeScan = 3U
 };
 ```
 
-The UI, gateway, LLM command layer, and firmware all agree on these numeric task IDs.
+The UI, gateway, LLM command layer, and firmware all agree on these numeric task IDs. Task IDs `1` and `2` are intentionally unused; older `Counter` and `Load` demo tasks were removed because they did not serve the current hardware workflow.
 
 ## Creating a User Task
 
@@ -466,16 +464,7 @@ for (;;) {
 }
 ```
 
-A task that never blocks can starve lower-priority tasks. If it has high priority, it can damage the whole system's responsiveness.
-
-The `UserLoadTask` intentionally performs some busy work, but it still delays every 100 ms:
-
-```cpp
-while (cnt > 0U) { cnt = cnt - 1U; }
-vTaskDelay(pdMS_TO_TICKS(100U));
-```
-
-That delay is what prevents it from permanently occupying the CPU.
+A task that never blocks can starve lower-priority tasks. If it has high priority, it can damage the whole system's responsiveness. User tasks in this firmware should therefore do bounded work and call `vTaskDelay()` or wait on a queue/event regularly.
 
 ## Tick Rate and Time
 

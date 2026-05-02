@@ -81,14 +81,14 @@ COMMAND_PLAN_SCHEMA: dict[str, Any] = {
         },
         "task_type": {
             "type": ["integer", "null"],
-            "enum": [0, 1, 2, 3, None],
-            "description": "For create_task only: 0=BLINK, 1=COUNTER, 2=LOAD, 3=RANGE_SCAN. Null otherwise.",
+            "enum": [0, 3, None],
+            "description": "For create_task only: 0=BLINK, 3=RANGE_SCAN. Null otherwise.",
         },
         "param": {
             "type": ["integer", "null"],
             "minimum": 0,
             "maximum": 255,
-            "description": "For create_task only. BLINK uses half-period x100ms, COUNTER period x10ms, LOAD spin multiplier, RANGE_SCAN threshold cm. Null otherwise.",
+            "description": "For create_task only. BLINK uses half-period x100ms, RANGE_SCAN threshold cm. Null otherwise.",
         },
         "slot_index": {
             "type": ["integer", "null"],
@@ -122,8 +122,6 @@ Allowed actions:
 
 Allowed task types:
 - BLINK / blink LED / sari isik blink: task_type=0. Param is half-period in 100 ms units. Default 5.
-- COUNTER: task_type=1. Param is period in 10 ms units. Default 1.
-- LOAD / CPU load / stress: task_type=2. Param is spin multiplier. Default 5, clamp to 1..50 unless explicit.
 - RANGE_SCAN / radar / servo scan / ultrasonic scan / uzaklik sensoru tarama: task_type=3.
   Param is near threshold in centimeters. Default 30. Clamp to 5..150 unless explicit safe range is provided.
 
@@ -456,15 +454,11 @@ def _validate_command_plan(raw: dict[str, Any]) -> CommandPlan:
         if plan.task_type is None or plan.param is None:
             return _unsupported_plan(confidence, "Missing task type or parameter.")
         task_type = int(plan.task_type)
-        if task_type < 0 or task_type > 3:
+        if task_type not in (0, 3):
             return _unsupported_plan(confidence, "Unsupported task type.")
         param = max(0, min(255, int(plan.param)))
         if task_type == 3:
             param = 30 if param == 0 else max(5, min(150, param))
-        elif task_type == 2:
-            param = 5 if param == 0 else max(1, min(50, param))
-        elif task_type == 1:
-            param = 1 if param == 0 else param
         elif task_type == 0:
             param = 5 if param == 0 else param
         return CommandPlan(action="create_task", lock=None, task_type=task_type, param=param,

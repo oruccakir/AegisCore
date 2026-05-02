@@ -124,7 +124,7 @@ static_assert(sizeof(PackedTaskEntry) == 14U);
 
 struct __attribute__((packed)) PayloadCreateTask
 {
-    std::uint8_t task_type; // 0=BLINK, 1=COUNTER, 2=LOAD, 3=RANGE_SCAN
+    std::uint8_t task_type; // 0=BLINK, 3=RANGE_SCAN
     std::uint8_t param;
 };
 static_assert(sizeof(PayloadCreateTask) == 2U);

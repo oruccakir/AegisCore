@@ -12,12 +12,10 @@ const TASK_STATE: Record<number, string> = {
   0: 'RUNNING', 1: 'READY', 2: 'BLOCKED', 3: 'SUSP', 4: 'DELETED',
 };
 
-type TaskType = 0 | 1 | 2 | 3;
+type TaskType = 0 | 3;
 
 const TASK_TYPE_LABELS: Record<TaskType, string> = {
   0: 'BLINK',
-  1: 'COUNTER',
-  2: 'LOAD',
   3: 'RANGE SCAN',
 };
 
@@ -26,17 +24,9 @@ const PARAM_META: Record<TaskType, { label: string; hint: (p: number) => string 
     label: 'half-period (×100 ms)',
     hint:  (p) => `LED toggles every ${p * 100} ms → ${p > 0 ? (1000 / (p * 100)).toFixed(2) : '∞'} Hz`,
   },
-  1: {
-    label: 'period (×10 ms)',
-    hint:  (p) => `counts every ${p * 10} ms → ${p > 0 ? Math.round(1000 / (p * 10)) : '∞'} /s`,
-  },
-  2: {
-    label: 'spin multiplier (×10 000)',
-    hint:  (p) => `busy-wait ~${(p * 10000 * 20 / 1_000_000).toFixed(1)} ms / 100 ms window`,
-  },
   3: {
     label: 'near threshold (cm)',
-    hint:  (p) => `servo scans until an object is within ${p > 0 ? p : 20} cm`,
+    hint:  (p) => `servo scans until an object is within ${p > 0 ? p : 30} cm`,
   },
 };
 
