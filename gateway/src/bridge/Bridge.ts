@@ -132,6 +132,15 @@ export class Bridge {
         }
         break;
 
+      case CmdId.BootReport:
+        if (frame.payload.length >= 4) {
+          this.ws.broadcast({
+            type: 'evt.boot_report',
+            reset_reason_bits: frame.payload.readUInt32LE(0),
+          });
+        }
+        break;
+
       case CmdId.FaultReport:
         this.ws.broadcast({
           type:              'evt.fault_report',
@@ -139,6 +148,16 @@ export class Bridge {
           ctx:               frame.payload.readUInt16LE(1),
           reset_reason_bits: frame.payload.readUInt32LE(3),
         });
+        break;
+
+      case CmdId.AuditEvent:
+        if (frame.payload.length >= 3) {
+          this.ws.broadcast({
+            type: 'evt.audit_event',
+            event_code: frame.payload[0] ?? 0,
+            count: frame.payload.readUInt16LE(1),
+          });
+        }
         break;
 
       case CmdId.Heartbeat:

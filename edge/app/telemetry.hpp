@@ -18,6 +18,7 @@ namespace CmdId {
     inline constexpr std::uint8_t kTelemetryTick   = 0x21U;
     inline constexpr std::uint8_t kTaskList        = 0x22U;
     inline constexpr std::uint8_t kRangeScanReport = 0x23U;
+    inline constexpr std::uint8_t kBootReport      = 0x24U;
     inline constexpr std::uint8_t kFaultReport     = 0x30U;
     inline constexpr std::uint8_t kAuditEvent      = 0x31U;
     inline constexpr std::uint8_t kCreateTask      = 0x50U;
@@ -51,6 +52,16 @@ namespace FaultCode {
     inline constexpr std::uint8_t kHeartbeatLoss = 0x07U;
 }
 
+namespace AuditCode {
+    inline constexpr std::uint8_t kBoot        = 0x01U;
+    inline constexpr std::uint8_t kTaskCreate  = 0x02U;
+    inline constexpr std::uint8_t kTaskDelete  = 0x03U;
+    inline constexpr std::uint8_t kRangeLock   = 0x04U;
+    inline constexpr std::uint8_t kVisionHit   = 0x05U;
+    inline constexpr std::uint8_t kSystemReset = 0x06U;
+    inline constexpr std::uint8_t kFailSafe    = 0x07U;
+}
+
 // Payload structs — all fields little-endian.
 
 struct __attribute__((packed)) PayloadReportState
@@ -73,6 +84,12 @@ struct __attribute__((packed)) PayloadTelemetryTick
 };
 static_assert(sizeof(PayloadTelemetryTick) == 12U);
 
+struct __attribute__((packed)) PayloadBootReport
+{
+    std::uint32_t reset_reason_bits;
+};
+static_assert(sizeof(PayloadBootReport) == 4U);
+
 struct __attribute__((packed)) PayloadFaultReport
 {
     std::uint8_t  fault_code;
@@ -80,6 +97,13 @@ struct __attribute__((packed)) PayloadFaultReport
     std::uint32_t reset_reason_bits;
 };
 static_assert(sizeof(PayloadFaultReport) == 7U);
+
+struct __attribute__((packed)) PayloadAuditEvent
+{
+    std::uint8_t  event_code;
+    std::uint16_t count;
+};
+static_assert(sizeof(PayloadAuditEvent) == 3U);
 
 struct __attribute__((packed)) PayloadHeartbeatTx
 {

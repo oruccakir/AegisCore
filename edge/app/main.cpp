@@ -54,6 +54,7 @@ constexpr TickType_t    kHeartbeatPeriodTicks   = pdMS_TO_TICKS(1000U);
 constexpr TickType_t    kTelemetryPeriodTicks   = pdMS_TO_TICKS(1000U);
 constexpr TickType_t    kTaskListPeriodTicks    = pdMS_TO_TICKS(2000U);
 constexpr TickType_t    kSystemResetDelayTicks  = pdMS_TO_TICKS(250U);
+constexpr TickType_t    kLcdAlertDurationTicks  = pdMS_TO_TICKS(3000U);
 constexpr std::uint8_t  kDetectionClassNone     = 0U;
 constexpr std::uint8_t  kDetectionClassPerson   = 1U;
 constexpr std::uint8_t  kDetectionThresholdPct  = 50U;
@@ -138,6 +139,9 @@ std::uint32_t gVersionLedOffMs = 0U;
 
 // Blue LED off time for detection pulse (300 ms).
 std::uint32_t gDetectionLedOffMs = 0U;
+std::uint32_t gGreenPulseOffMs   = 0U;
+std::uint32_t gYellowPulseOffMs  = 0U;
+std::uint32_t gRedPulseOffMs     = 0U;
 
 // Last detection result received from gateway.
 struct LastDetection {
@@ -152,6 +156,7 @@ volatile std::uint16_t gLcdCpuLoadX10  = 0U;
 volatile std::uint8_t  gLcdHbMissCount = 0U;
 volatile std::uint8_t  gLcdTaskCount   = 0U;
 volatile std::uint32_t gLcdUptimeMs    = 0U;
+volatile std::uint32_t gLcdTaskListMs  = 0U;
 volatile std::uint16_t gLcdStackMin    = 0U;
 volatile std::uint8_t  gLcdRangeAngle  = 0U;
 volatile std::uint16_t gLcdRangeDistCm = 0U;
@@ -163,8 +168,13 @@ volatile bool          gLcdRangeActive = false;
 volatile std::uint8_t  gLcdDetectClass = 0U;
 volatile std::uint8_t  gLcdDetectConf  = 0U;
 volatile bool          gLcdDetectSeen  = false;
+volatile std::uint8_t  gLcdAlertCode   = 0U;
+volatile std::uint16_t gLcdAlertValue  = 0U;
+volatile TickType_t    gLcdAlertUntilTick = 0U;
 volatile bool          gSystemResetPending = false;
-TickType_t             gSystemResetDueTick = 0U;
+volatile TickType_t    gSystemResetDueTick = 0U;
+std::uint32_t          gBootResetReasonBits = 0U;
+bool                   gVisionPersonActive = false;
 
 // Yellow LED off time — set when ManualLock arrives, cleared by StateMachineTask.
 std::uint32_t gManualLockLedOffMs = 0U;
@@ -204,6 +214,58 @@ static void SendNack(std::uint32_t echoed_seq, std::uint8_t err) noexcept
     p.echoed_seq = echoed_seq;
     p.err_code   = err;
     QueueTx(CmdId::kNack,
+            reinterpret_cast<const std::uint8_t*>(&p),
+            static_cast<std::uint8_t>(sizeof(p)));
+}
+
+static void QueueAuditEvent(std::uint8_t event_code, std::uint16_t count) noexcept
+{
+    PayloadAuditEvent p = {};
+    p.event_code = event_code;
+    p.count      = count;
+    QueueTx(CmdId::kAuditEvent,
+            reinterpret_cast<const std::uint8_t*>(&p),
+            static_cast<std::uint8_t>(sizeof(p)));
+}
+
+static void PulseFeedback(std::uint8_t event_code) noexcept
+{
+    const std::uint32_t until_ms = MillisecondsSinceBoot() + 350U;
+    switch (event_code) {
+        case AuditCode::kTaskCreate:
+            gGreenPulseOffMs = until_ms;
+            break;
+        case AuditCode::kTaskDelete:
+        case AuditCode::kRangeLock:
+            gYellowPulseOffMs = until_ms;
+            break;
+        case AuditCode::kVisionHit:
+            gDetectionLedOffMs = until_ms;
+            break;
+        case AuditCode::kSystemReset:
+        case AuditCode::kFailSafe:
+            gRedPulseOffMs = until_ms;
+            break;
+        default:
+            gVersionLedOffMs = until_ms;
+            break;
+    }
+}
+
+static void SetLcdAlert(std::uint8_t event_code, std::uint16_t value) noexcept
+{
+    gLcdAlertCode      = event_code;
+    gLcdAlertValue     = value;
+    gLcdAlertUntilTick = xTaskGetTickCount() + kLcdAlertDurationTicks;
+    PulseFeedback(event_code);
+    QueueAuditEvent(event_code, value);
+}
+
+static void QueueBootReport() noexcept
+{
+    PayloadBootReport p = {};
+    p.reset_reason_bits = gBootResetReasonBits;
+    QueueTx(CmdId::kBootReport,
             reinterpret_cast<const std::uint8_t*>(&p),
             static_cast<std::uint8_t>(sizeof(p)));
 }
@@ -270,6 +332,7 @@ void UserRangeScanTask(void* ctx) noexcept
     std::uint8_t locked_angle = angle;
     std::uint8_t step_count = 0U;
     std::uint8_t lost_samples = 0U;
+    bool range_lock_announced = false;
 
     for (;;)
     {
@@ -285,6 +348,7 @@ void UserRangeScanTask(void* ctx) noexcept
                 lost_samples = static_cast<std::uint8_t>(lost_samples + 1U);
                 if (lost_samples >= kLostSamplesToRelease) {
                     locked = false;
+                    range_lock_announced = false;
                     lost_samples = 0U;
                     angle = locked_angle;
                 }
@@ -310,6 +374,10 @@ void UserRangeScanTask(void* ctx) noexcept
                 locked = true;
                 locked_angle = angle;
                 lost_samples = 0U;
+                if (!range_lock_announced) {
+                    SetLcdAlert(AuditCode::kRangeLock, angle);
+                    range_lock_announced = true;
+                }
                 QueueRangeScanReport(angle, distance_cm, true, true, near_threshold_cm);
                 vTaskDelay(kLockDelay);
                 continue;
@@ -394,6 +462,21 @@ void Put4(char* line, std::uint8_t pos, std::uint32_t value) noexcept
         static_cast<char>('0' + (clamped % 10U));
 }
 
+char HexNibble(std::uint8_t value) noexcept
+{
+    const std::uint8_t nibble = static_cast<std::uint8_t>(value & 0x0FU);
+    return static_cast<char>(nibble < 10U ? ('0' + nibble) : ('A' + (nibble - 10U)));
+}
+
+void PutHex4(char* line, std::uint8_t pos, std::uint32_t value) noexcept
+{
+    const std::uint16_t clamped = static_cast<std::uint16_t>(value & 0xFFFFU);
+    line[pos] = HexNibble(static_cast<std::uint8_t>(clamped >> 12U));
+    line[static_cast<std::uint8_t>(pos + 1U)] = HexNibble(static_cast<std::uint8_t>(clamped >> 8U));
+    line[static_cast<std::uint8_t>(pos + 2U)] = HexNibble(static_cast<std::uint8_t>(clamped >> 4U));
+    line[static_cast<std::uint8_t>(pos + 3U)] = HexNibble(static_cast<std::uint8_t>(clamped));
+}
+
 void PutCpu(char* line, std::uint8_t pos, std::uint16_t cpu_x10) noexcept
 {
     const std::uint16_t clamped = (cpu_x10 > 999U) ? 999U : cpu_x10;
@@ -407,6 +490,63 @@ void PutCpu(char* line, std::uint8_t pos, std::uint16_t cpu_x10) noexcept
 const char* DetectionShortName(std::uint8_t class_id) noexcept
 {
     return class_id == kDetectionClassPerson ? "PERSON" : "NONE";
+}
+
+const char* ResetReasonShortName(std::uint32_t bits) noexcept
+{
+    if ((bits & RCC_CSR_SFTRSTF) != 0U)   { return "SW RESET"; }
+    if ((bits & RCC_CSR_IWDGRSTF) != 0U)  { return "IWDG"; }
+    if ((bits & RCC_CSR_WWDGRSTF) != 0U)  { return "WWDG"; }
+    if ((bits & RCC_CSR_PORRSTF) != 0U)   { return "POWER"; }
+    if ((bits & RCC_CSR_PINRSTF) != 0U)   { return "NRST PIN"; }
+    if ((bits & RCC_CSR_BORRSTF) != 0U)   { return "BROWNOUT"; }
+    if ((bits & RCC_CSR_LPWRRSTF) != 0U)  { return "LOW PWR"; }
+    return "UNKNOWN";
+}
+
+void RenderAlertPage(char* line0, char* line1, std::uint8_t code, std::uint16_t value) noexcept
+{
+    PutText(line0, 0U, "EVENT");
+    switch (code) {
+        case AuditCode::kBoot:
+            PutText(line0, 6U, "BOOT");
+            PutText(line1, 0U, ResetReasonShortName(gBootResetReasonBits));
+            break;
+        case AuditCode::kTaskCreate:
+            PutText(line0, 6U, "TASK ADD");
+            PutText(line1, 0U, "SLOT");
+            Put2(line1, 5U, value);
+            break;
+        case AuditCode::kTaskDelete:
+            PutText(line0, 6U, "TASK DEL");
+            PutText(line1, 0U, "SLOT");
+            Put2(line1, 5U, value);
+            break;
+        case AuditCode::kRangeLock:
+            PutText(line0, 6U, "RANGE LOCK");
+            PutText(line1, 0U, "ANGLE");
+            Put3(line1, 6U, value);
+            break;
+        case AuditCode::kVisionHit:
+            PutText(line0, 6U, "VISION HIT");
+            PutText(line1, 0U, "CONF");
+            Put3(line1, 5U, value);
+            line1[8U] = '%';
+            break;
+        case AuditCode::kSystemReset:
+            PutText(line0, 6U, "RESET");
+            PutText(line1, 0U, "REBOOTING");
+            break;
+        case AuditCode::kFailSafe:
+            PutText(line0, 6U, "FAIL SAFE");
+            PutText(line1, 0U, "LOCK ACTIVE");
+            break;
+        default:
+            PutText(line0, 6U, "UNKNOWN");
+            PutText(line1, 0U, "CODE");
+            Put3(line1, 5U, code);
+            break;
+    }
 }
 
 void RenderSystemPage(char* line0, char* line1) noexcept
@@ -433,11 +573,22 @@ void RenderTaskPage(char* line0, char* line1) noexcept
 {
     PutText(line0, 0U, "TASKS");
     Put2(line0, 6U, gLcdTaskCount);
-    PutText(line0, 10U, "STACK");
+    PutText(line0, 10U, "LIVE");
 
     PutText(line1, 0U, "MIN");
     Put4(line1, 4U, gLcdStackMin);
     PutText(line1, 9U, "WORDS");
+    const std::uint32_t age_s = (MillisecondsSinceBoot() - gLcdTaskListMs) / 1000U;
+    Put2(line1, 14U, age_s);
+}
+
+void RenderBootPage(char* line0, char* line1) noexcept
+{
+    PutText(line0, 0U, "BOOT");
+    PutText(line0, 5U, ResetReasonShortName(gBootResetReasonBits));
+    PutText(line1, 0U, "RCC");
+    PutHex4(line1, 4U, (gBootResetReasonBits >> 16U) & 0xFFFFU);
+    PutHex4(line1, 9U, gBootResetReasonBits & 0xFFFFU);
 }
 
 void RenderRangePage(char* line0, char* line1) noexcept
@@ -504,19 +655,32 @@ void UserLcdStatusTask(void* ctx) noexcept
         FillLine(line0);
         FillLine(line1);
 
-        switch (page) {
-            case 0U:
-                RenderSystemPage(line0, line1);
-                break;
-            case 1U:
-                RenderTaskPage(line0, line1);
-                break;
-            case 2U:
-                RenderRangePage(line0, line1);
-                break;
-            default:
-                RenderVisionPage(line0, line1);
-                break;
+        const TickType_t now_ticks = xTaskGetTickCount();
+        const std::uint8_t alert_code = gLcdAlertCode;
+        if (alert_code != 0U && now_ticks < gLcdAlertUntilTick) {
+            RenderAlertPage(line0, line1, alert_code, gLcdAlertValue);
+        } else {
+            if (alert_code != 0U) {
+                gLcdAlertCode = 0U;
+            }
+
+            switch (page) {
+                case 0U:
+                    RenderSystemPage(line0, line1);
+                    break;
+                case 1U:
+                    RenderTaskPage(line0, line1);
+                    break;
+                case 2U:
+                    RenderRangePage(line0, line1);
+                    break;
+                case 3U:
+                    RenderVisionPage(line0, line1);
+                    break;
+                default:
+                    RenderBootPage(line0, line1);
+                    break;
+            }
         }
 
         LcdWriteLines(line0, line1);
@@ -525,7 +689,7 @@ void UserLcdStatusTask(void* ctx) noexcept
         ticks_on_page = static_cast<std::uint8_t>(ticks_on_page + 1U);
         if (ticks_on_page >= 3U) {
             ticks_on_page = 0U;
-            page = static_cast<std::uint8_t>((page + 1U) % 4U);
+            page = static_cast<std::uint8_t>((page + 1U) % 5U);
             LcdClear();
         }
     }
@@ -708,6 +872,7 @@ static void DispatchRemoteCmd(StateMachine& sm,
         gManualLockLedOffMs = MillisecondsSinceBoot() + 1000U;
         sm.ForceFailSafe(now_ms);
         FailSafeSupervisor::Instance().ReportEvent(FailSafeEvent::ExternalTrigger);
+        SetLcdAlert(AuditCode::kFailSafe, 0U);
         SendAck(rcmd.seq);
         break;
 
@@ -733,8 +898,9 @@ static void DispatchRemoteCmd(StateMachine& sm,
 
     case CmdId::kSystemReset:
         SendAck(rcmd.seq);
-        gSystemResetPending = true;
+        SetLcdAlert(AuditCode::kSystemReset, 0U);
         gSystemResetDueTick = xTaskGetTickCount() + kSystemResetDelayTicks;
+        gSystemResetPending = true;
         break;
 
     case CmdId::kDetectionResult: {
@@ -755,11 +921,16 @@ static void DispatchRemoteCmd(StateMachine& sm,
         if (pd->class_id == kDetectionClassPerson &&
             pd->confidence_pct >= kDetectionThresholdPct)
         {
+            if (!gVisionPersonActive) {
+                SetLcdAlert(AuditCode::kVisionHit, pd->confidence_pct);
+                gVisionPersonActive = true;
+            }
             sm.ForceState(SystemState::Track, now_ms);
         }
         else if (pd->class_id == kDetectionClassNone ||
                  pd->confidence_pct < kDetectionThresholdPct)
         {
+            gVisionPersonActive = false;
             sm.ForceState(SystemState::Idle, now_ms);
         }
         else
@@ -781,6 +952,7 @@ static void DispatchRemoteCmd(StateMachine& sm,
             CreateUserTask(rcmd.payload[0U], rcmd.payload[1U]);
         if (slot < 0) { SendNack(rcmd.seq, ErrCode::kBusy); break; }
         SendAck(rcmd.seq);
+        SetLcdAlert(AuditCode::kTaskCreate, static_cast<std::uint16_t>(slot));
         QueueTaskList();
         break;
     }
@@ -795,6 +967,7 @@ static void DispatchRemoteCmd(StateMachine& sm,
             break;
         }
         SendAck(rcmd.seq);
+        SetLcdAlert(AuditCode::kTaskDelete, rcmd.payload[0U]);
         QueueTaskList();
         break;
     }
@@ -814,6 +987,7 @@ static void QueueTaskList() noexcept
     const std::uint8_t count =
         static_cast<std::uint8_t>(n > kMaxTaskCount ? kMaxTaskCount : n);
     gLcdTaskCount = count;
+    gLcdTaskListMs = MillisecondsSinceBoot();
 
     constexpr std::uint8_t kEntry =
         static_cast<std::uint8_t>(sizeof(PackedTaskEntry));
@@ -949,8 +1123,11 @@ void StateMachineTask(void* /*ctx*/)
     TickType_t next_sim_tick       = xTaskGetTickCount() + kSimulationPeriodTicks;
     TickType_t next_telemetry_tick = xTaskGetTickCount() + kTelemetryPeriodTicks;
     TickType_t next_tasklist_tick  = xTaskGetTickCount() + kTaskListPeriodTicks;
+    bool fail_safe_announced = false;
 
     ApplyLedOutputs(sm.GetLedOutputs(MillisecondsSinceBoot()));
+    QueueBootReport();
+    SetLcdAlert(AuditCode::kBoot, 0U);
 
     for (;;)
     {
@@ -959,6 +1136,14 @@ void StateMachineTask(void* /*ctx*/)
         if (FailSafeSupervisor::Instance().IsTriggered())
         {
             sm.ForceFailSafe(MillisecondsSinceBoot());
+            if (!fail_safe_announced) {
+                SetLcdAlert(AuditCode::kFailSafe, 0U);
+                fail_safe_announced = true;
+            }
+        }
+        else
+        {
+            fail_safe_announced = false;
         }
 
         RemoteCmd rcmd = {};
@@ -1009,9 +1194,14 @@ void StateMachineTask(void* /*ctx*/)
 
         const std::uint32_t now_led = MillisecondsSinceBoot();
         LedOutputs leds = sm.GetLedOutputs(now_led);
-        leds.blue_on   = (gVersionLedOffMs   != 0U && now_led < gVersionLedOffMs)
+        leds.green_on  = leds.green_on
+                         || (gGreenPulseOffMs != 0U && now_led < gGreenPulseOffMs);
+        leds.blue_on   = (gVersionLedOffMs != 0U && now_led < gVersionLedOffMs)
                          || (gDetectionLedOffMs != 0U && now_led < gDetectionLedOffMs);
+        leds.red_on    = leds.red_on
+                         || (gRedPulseOffMs != 0U && now_led < gRedPulseOffMs);
         leds.yellow_on = (gManualLockLedOffMs != 0U && now_led < gManualLockLedOffMs)
+                         || (gYellowPulseOffMs != 0U && now_led < gYellowPulseOffMs)
                          || static_cast<bool>(gUserBlinkState);
         ApplyLedOutputs(leds);
 
@@ -1066,6 +1256,9 @@ void HeartbeatTask(void* /*ctx*/)
 
 extern "C" int main()
 {
+    gBootResetReasonBits = RCC->CSR;
+    __HAL_RCC_CLEAR_RESET_FLAGS();
+
     aegis::edge::MPU_Init();
     aegis::edge::InitializePlatform();
 

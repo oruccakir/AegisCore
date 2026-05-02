@@ -21,6 +21,7 @@ export const CmdId = {
   TelemetryTick: 0x21,
   TaskList:      0x22,
   RangeScanReport: 0x23,
+  BootReport:    0x24,
   FaultReport:   0x30,
   AuditEvent:    0x31,
   CreateTask:    0x50,

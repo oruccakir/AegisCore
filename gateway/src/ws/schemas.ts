@@ -76,11 +76,22 @@ export interface EvtTelemetry {
   hb_miss_count:      number;
 }
 
+export interface EvtBootReport {
+  type:              'evt.boot_report';
+  reset_reason_bits: number;
+}
+
 export interface EvtFaultReport {
   type:              'evt.fault_report';
   fault_code:        number;
   ctx:               number;
   reset_reason_bits: number;
+}
+
+export interface EvtAuditEvent {
+  type:       'evt.audit_event';
+  event_code: number;
+  count:      number;
 }
 
 export interface EvtHeartbeat {
@@ -147,7 +158,9 @@ export interface EvtDetection {
 export type OutboundEvent =
   | EvtReportState
   | EvtTelemetry
+  | EvtBootReport
   | EvtFaultReport
+  | EvtAuditEvent
   | EvtHeartbeat
   | EvtVersionReport
   | EvtNack

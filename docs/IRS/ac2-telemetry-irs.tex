@@ -105,18 +105,40 @@ Payload içinde \texttt{0xAA} byte'ı geçebilir (binary data). Parser'ın SYNC 
 \endhead
 0x01 & CMD\_GET\_VERSION      & Host -> Edge & — \\
 0x02 & CMD\_VERSION\_REPORT   & Edge -> Host & \texttt{u8 maj, u8 min, u8 patch, u8[8] git\_sha, u32 build\_ts} \\
-0x10 & CMD\_SET\_STATE        & Host -> Edge & \texttt{u8 target\_state} (0=IDLE, 1=SEARCH, 2=TRACK) \\
+0x10 & RESERVED\_LEGACY\_SET\_STATE & — & Deprecated; UI/Gateway artık state set etmez \\
 0x11 & CMD\_MANUAL\_LOCK      & Host -> Edge & — (state SEARCH/TRACK'tayken idempotent) \\
 0x12 & CMD\_RESET\_ACK        & Host -> Edge & — (FAIL-SAFE'ten çıkış için) \\
+0x13 & CMD\_SYSTEM\_RESET     & Host -> Edge & — (ACK sonrası gecikmeli MCU reboot) \\
 0x20 & CMD\_REPORT\_STATE     & Edge -> Host & \texttt{u8 state, u8 prev\_state, u32 uptime\_ms} \\
 0x21 & CMD\_TELEMETRY\_TICK   & Edge -> Host & \texttt{u8 state, u16 cpu\_load\_x10, u16 free\_stack\_min\_words, u8 hb\_miss\_count} \\
+0x22 & CMD\_TASK\_LIST        & Edge -> Host & \texttt{u8 count, packed task entries[14]} \\
+0x23 & CMD\_RANGE\_SCAN\_REPORT & Edge -> Host & \texttt{u8 angle, u16 distance\_cm, u8 flags, u16 threshold\_cm} \\
+0x24 & CMD\_BOOT\_REPORT      & Edge -> Host & \texttt{u32 reset\_reason\_bits} \\
 0x30 & CMD\_FAULT\_REPORT     & Edge -> Host & \texttt{u8 fault\_code, u16 ctx, u32 reset\_reason\_bits} \\
 0x31 & CMD\_AUDIT\_EVENT      & Edge -> Host & \texttt{u8 event\_code, u16 count} \\
+0x50 & CMD\_CREATE\_TASK      & Host -> Edge & \texttt{u8 task\_type, u8 param} \\
+0x51 & CMD\_DELETE\_TASK      & Host -> Edge & \texttt{u8 slot\_index} \\
+0x60 & CMD\_DETECTION\_RESULT & Host -> Edge & \texttt{u8 class\_id, u8 confidence\_pct} \\
 0x80 & CMD\_ACK               & Edge -> Host & \texttt{u32 echoed\_seq} \\
 0x81 & CMD\_NACK              & Edge -> Host & \texttt{u32 echoed\_seq, u8 err\_code} \\
 0x99 & CMD\_HEARTBEAT         & Bidirectional & \texttt{u32 uptime\_ms} (TX), \texttt{u32 host\_ts} (RX) \\
 \hline
 \end{longtable}
+
+\subsection{Audit Event Codes}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Code} & \textbf{Name} & \textbf{Meaning} \\
+\hline
+0x01 & AUDIT\_BOOT        & Edge booted; \texttt{count} reserved. \\
+0x02 & AUDIT\_TASK\_CREATE & User task created; \texttt{count}=slot index. \\
+0x03 & AUDIT\_TASK\_DELETE & User task deleted; \texttt{count}=slot index. \\
+0x04 & AUDIT\_RANGE\_LOCK  & Range scan locked; \texttt{count}=angle degrees. \\
+0x05 & AUDIT\_VISION\_HIT  & Vision detection crossed threshold; \texttt{count}=confidence percent. \\
+0x06 & AUDIT\_SYSTEM\_RESET & System reset command accepted; \texttt{count} reserved. \\
+0x07 & AUDIT\_FAIL\_SAFE   & Fail-safe entered; \texttt{count} reserved. \\
+\hline
+\end{tabularx}
 
 \subsection{Error Codes (CMD\_NACK.err\_code)}
 \begin{tabularx}{\textwidth}{|l|l|X|}

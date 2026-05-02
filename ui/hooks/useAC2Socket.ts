@@ -17,6 +17,8 @@ export interface SystemInfo {
   uptime_ms: number;
   version?: string;
   git_sha?: string;
+  boot_reason?: string;
+  boot_reason_bits?: number;
 }
 
 export interface LogEntry {
@@ -34,6 +36,7 @@ export interface TaskInfo {
   stack_watermark: number;
   cpu_load:        number;
   task_id:         number; // bit7=1 → user task, bits[2:0] = slot index
+  last_seen_ms?:   number;
 }
 
 export interface DetectionInfo {
@@ -68,6 +71,46 @@ const ERR_CODES: Record<number, string> = {
 };
 
 const STATE_NAMES = ['IDLE', 'SEARCH', 'TRACK', 'FAIL_SAFE'];
+
+const AUDIT_EVENTS: Record<number, string> = {
+  1: 'BOOT',
+  2: 'TASK CREATE',
+  3: 'TASK DELETE',
+  4: 'RANGE LOCK',
+  5: 'VISION HIT',
+  6: 'SYSTEM RESET',
+  7: 'FAIL SAFE',
+};
+
+function decodeBootReason(bits: number): string {
+  if ((bits & 0x10000000) !== 0) return 'SOFTWARE RESET';
+  if ((bits & 0x20000000) !== 0) return 'IWDG RESET';
+  if ((bits & 0x40000000) !== 0) return 'WWDG RESET';
+  if ((bits & 0x08000000) !== 0) return 'POWER RESET';
+  if ((bits & 0x04000000) !== 0) return 'NRST PIN';
+  if ((bits & 0x02000000) !== 0) return 'BROWNOUT';
+  if ((bits & 0x80000000) !== 0) return 'LOW POWER RESET';
+  return bits === 0 ? 'UNKNOWN' : `RCC 0x${bits.toString(16)}`;
+}
+
+function describeCommand(cmd: OutCmd): string {
+  switch (cmd.type) {
+    case 'cmd.manual_lock':
+      return cmd.lock ? 'manual fail-safe lock' : 'manual lock release request';
+    case 'cmd.get_version':
+      return 'get version';
+    case 'cmd.system_reset':
+      return 'system reset requested';
+    case 'cmd.heartbeat':
+      return 'heartbeat sent';
+    case 'cmd.create_task':
+      return `create task type=${cmd.task_type} param=${cmd.param}`;
+    case 'cmd.delete_task':
+      return `delete task slot=${cmd.slot_index}`;
+    case 'cmd.vision_frame':
+      return 'vision frame submitted';
+  }
+}
 
 let logId  = 0;
 let cmdSeq = 0;
@@ -135,6 +178,17 @@ export function useAC2Socket(url: string) {
             setSysInfo(prev => ({ ...prev, uptime_ms: d.uptime_ms }));
             break;
 
+          case 'evt.boot_report': {
+            const reason = decodeBootReason(d.reset_reason_bits);
+            setSysInfo(prev => ({
+              ...prev,
+              boot_reason: reason,
+              boot_reason_bits: d.reset_reason_bits,
+            }));
+            addLog('BOOT', `${reason} rst=0x${d.reset_reason_bits.toString(16)}`, 'ok');
+            break;
+          }
+
           case 'evt.report_state':
             addLog('STATE',
               `${STATE_NAMES[d.prev_state] ?? d.prev_state} → ${STATE_NAMES[d.state] ?? d.state}`,
@@ -166,8 +220,20 @@ export function useAC2Socket(url: string) {
               'error');
             break;
 
+          case 'evt.audit_event': {
+            const name = AUDIT_EVENTS[d.event_code] ?? `AUDIT ${d.event_code}`;
+            const level: LogEntry['level'] =
+              d.event_code === 6 || d.event_code === 7 ? 'warn' :
+              d.event_code === 2 || d.event_code === 4 || d.event_code === 5 ? 'ok' : 'info';
+            addLog('EDGE', `${name} value=${d.count}`, level);
+            break;
+          }
+
           case 'evt.task_list':
-            setTasks(d.tasks as TaskInfo[]);
+            setTasks((d.tasks as TaskInfo[]).map((task) => ({
+              ...task,
+              last_seen_ms: Date.now(),
+            })));
             break;
 
           case 'evt.range_scan':
@@ -216,8 +282,13 @@ export function useAC2Socket(url: string) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       const envelope = { v: 2, type: cmd.type, ts: Date.now(), seq: cmdSeq++, data: cmd };
       wsRef.current.send(JSON.stringify(envelope));
+      if (cmd.type !== 'cmd.vision_frame') {
+        addLog('UI', describeCommand(cmd), cmd.type === 'cmd.system_reset' ? 'warn' : 'info');
+      }
+    } else {
+      addLog('UI', `dropped ${cmd.type}; websocket offline`, 'warn');
     }
-  }, []);
+  }, [addLog]);
 
   return { status, telemetry, sysInfo, log, tasks, detection, rangeScan, send };
 }

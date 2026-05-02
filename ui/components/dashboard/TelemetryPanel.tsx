@@ -18,6 +18,7 @@ export default function TelemetryPanel({ telemetry, sysInfo }: Props) {
       <div className={styles.panelTitle}>TELEMETRY</div>
       <div className={styles.metrics}>
         <Metric label="UPTIME" value={fmtUptime(sysInfo.uptime_ms)} />
+        <Metric label="BOOT" value={sysInfo.boot_reason ?? '-'} />
         <Metric label="CPU LOAD" value={telemetry ? `${(telemetry.cpu_load_x10 / 10).toFixed(1)}%` : '-'} />
         <Metric label="STACK MIN" value={stackMin !== null ? `${stackMin}w` : '-'} />
         <Metric

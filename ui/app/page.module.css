@@ -252,6 +252,7 @@
   color: var(--green);
   letter-spacing: 0.05em;
   line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 /* Vision */
@@ -575,6 +576,24 @@
   letter-spacing: 0.08em;
   color: var(--text-faint);
   min-width: 44px;
+}
+
+.taskMonitorLiveTag {
+  min-width: 34px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 1px 4px;
+  color: var(--amber);
+  font-family: var(--display);
+  font-size: 7px;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.taskMonitorLiveTag[data-live="true"] {
+  border-color: var(--green-dim);
+  color: var(--green);
+  background: var(--green-faint);
 }
 
 .taskMonitorCpu {

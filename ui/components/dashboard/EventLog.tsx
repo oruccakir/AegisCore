@@ -19,7 +19,7 @@ function fmt(ts: number) {
 export default function EventLog({ entries }: Props) {
   return (
     <div className={styles.eventLog}>
-      <div className={styles.eventLogHeader}>EVENT LOG</div>
+      <div className={styles.eventLogHeader}>AUDIT TIMELINE</div>
       <div className={styles.eventLogList}>
         {entries.length === 0 && (
           <div className={styles.eventLogEmpty}>— awaiting events —</div>

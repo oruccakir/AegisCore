@@ -73,6 +73,7 @@ export default function TaskMonitor({ tasks, send }: Props) {
             const slotIdx = t.task_id & 0x7f;
             const pct     = Math.min(100, t.cpu_load);
             const warn    = (t.stack_watermark < 32);
+            const live    = t.last_seen_ms !== undefined && Date.now() - t.last_seen_ms < 3500;
             const barColor = warn ? 'var(--red)' : isUser ? 'var(--amber)' : 'var(--green)';
 
             return (
@@ -83,6 +84,13 @@ export default function TaskMonitor({ tasks, send }: Props) {
                   </span>
                   <span className={styles.taskMonitorPrio} style={{ color: barColor }}>P{t.priority}</span>
                   <span className={styles.taskMonitorStateTag}>{TASK_STATE[t.state] ?? t.state}</span>
+                  <span
+                    className={styles.taskMonitorLiveTag}
+                    data-live={live}
+                    title={live ? 'Seen in the latest task telemetry' : 'Task telemetry is stale'}
+                  >
+                    {live ? 'LIVE' : 'STALE'}
+                  </span>
                   <span className={styles.taskMonitorCpu}>{pct}%</span>
                   <span className={styles.taskMonitorFree} style={{ color: warn ? 'var(--red)' : 'var(--text-dim)' }}>
                     {t.stack_watermark}w
