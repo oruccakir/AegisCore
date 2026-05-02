@@ -44,6 +44,15 @@ export interface DetectionInfo {
   ts: number;
 }
 
+export interface RangeScanInfo {
+  angle_deg: number;
+  distance_cm: number;
+  locked: boolean;
+  valid: boolean;
+  threshold_cm: number;
+  ts: number;
+}
+
 export type OutCmd =
   | { type: 'cmd.set_state'; targetState: 'idle' | 'search' | 'track' | 'fail_safe' }
   | { type: 'cmd.manual_lock'; lock: boolean }
@@ -73,6 +82,7 @@ export function useAC2Socket(url: string) {
   const [log,       setLog]       = useState<LogEntry[]>([]);
   const [tasks,     setTasks]     = useState<TaskInfo[]>([]);
   const [detection, setDetection] = useState<DetectionInfo | null>(null);
+  const [rangeScan, setRangeScan] = useState<RangeScanInfo | null>(null);
 
   const addLog = useCallback((type: string, text: string, level: LogEntry['level'] = 'info') => {
     setLog(prev => {
@@ -160,6 +170,17 @@ export function useAC2Socket(url: string) {
             setTasks(d.tasks as TaskInfo[]);
             break;
 
+          case 'evt.range_scan':
+            setRangeScan({
+              angle_deg: d.angle_deg,
+              distance_cm: d.distance_cm,
+              locked: d.locked,
+              valid: d.valid,
+              threshold_cm: d.threshold_cm,
+              ts: Date.now(),
+            });
+            break;
+
           case 'evt.detection':
             setDetection({
               class_id: d.class_id,
@@ -198,5 +219,5 @@ export function useAC2Socket(url: string) {
     }
   }, []);
 
-  return { status, telemetry, sysInfo, log, tasks, detection, send };
+  return { status, telemetry, sysInfo, log, tasks, detection, rangeScan, send };
 }

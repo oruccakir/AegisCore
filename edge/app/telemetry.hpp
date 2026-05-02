@@ -17,6 +17,7 @@ namespace CmdId {
     inline constexpr std::uint8_t kReportState    = 0x20U;
     inline constexpr std::uint8_t kTelemetryTick   = 0x21U;
     inline constexpr std::uint8_t kTaskList        = 0x22U;
+    inline constexpr std::uint8_t kRangeScanReport = 0x23U;
     inline constexpr std::uint8_t kFaultReport     = 0x30U;
     inline constexpr std::uint8_t kAuditEvent      = 0x31U;
     inline constexpr std::uint8_t kCreateTask      = 0x50U;
@@ -133,6 +134,15 @@ struct __attribute__((packed)) PayloadDeleteTask
     std::uint8_t slot_index;
 };
 static_assert(sizeof(PayloadDeleteTask) == 1U);
+
+struct __attribute__((packed)) PayloadRangeScanReport
+{
+    std::uint8_t  angle_deg;
+    std::uint16_t distance_cm;
+    std::uint8_t  flags; // bit0=locked, bit1=measurement valid
+    std::uint16_t threshold_cm;
+};
+static_assert(sizeof(PayloadRangeScanReport) == 6U);
 
 struct __attribute__((packed)) PayloadDetectionResult
 {

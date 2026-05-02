@@ -186,6 +186,23 @@ static void SendNack(std::uint32_t echoed_seq, std::uint8_t err) noexcept
             static_cast<std::uint8_t>(sizeof(p)));
 }
 
+static void QueueRangeScanReport(std::uint8_t angle_deg,
+                                 std::uint16_t distance_cm,
+                                 bool measurement_valid,
+                                 bool locked,
+                                 std::uint16_t threshold_cm) noexcept
+{
+    PayloadRangeScanReport p = {};
+    p.angle_deg = angle_deg;
+    p.distance_cm = distance_cm;
+    p.flags = static_cast<std::uint8_t>((locked ? 0x01U : 0x00U) |
+                                        (measurement_valid ? 0x02U : 0x00U));
+    p.threshold_cm = threshold_cm;
+    QueueTx(CmdId::kRangeScanReport,
+            reinterpret_cast<const std::uint8_t*>(&p),
+            static_cast<std::uint8_t>(sizeof(p)));
+}
+
 // ---- User task functions ----------------------------------------------------
 
 void UserBlinkTask(void* ctx) noexcept
@@ -243,6 +260,7 @@ void UserRangeScanTask(void* ctx) noexcept
 
             std::uint16_t distance_cm = 0U;
             const bool valid = aegis::edge::MeasureRangeCm(distance_cm);
+            QueueRangeScanReport(locked_angle, distance_cm, valid, true, near_threshold_cm);
             if (valid && distance_cm <= static_cast<std::uint16_t>(near_threshold_cm + 5U)) {
                 lost_samples = 0U;
             } else {
@@ -261,19 +279,26 @@ void UserRangeScanTask(void* ctx) noexcept
         aegis::edge::SetServoAngleDegrees(angle);
         vTaskDelay(kStepDelay);
         step_count = static_cast<std::uint8_t>(step_count + 1U);
+        bool report_valid = false;
+        std::uint16_t report_distance_cm = 0U;
 
         if (step_count >= kMeasureEverySteps) {
             step_count = 0U;
             std::uint16_t distance_cm = 0U;
             const bool valid = aegis::edge::MeasureRangeCm(distance_cm);
+            report_valid = valid;
+            report_distance_cm = distance_cm;
             if (valid && distance_cm <= near_threshold_cm) {
                 locked = true;
                 locked_angle = angle;
                 lost_samples = 0U;
+                QueueRangeScanReport(angle, distance_cm, true, true, near_threshold_cm);
                 vTaskDelay(kLockDelay);
                 continue;
             }
         }
+
+        QueueRangeScanReport(angle, report_distance_cm, report_valid, false, near_threshold_cm);
 
         if (increasing) {
             if (angle >= static_cast<std::uint8_t>(kMaxAngle - kStepDegrees)) {

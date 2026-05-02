@@ -50,12 +50,13 @@ function ConnDot({ status }: { status: string }) {
 }
 
 export default function Dashboard() {
-  const { status, telemetry, sysInfo, log, tasks, detection, send } = useAC2Socket('ws://localhost:8443');
+  const { status, telemetry, sysInfo, log, tasks, detection, rangeScan, send } = useAC2Socket('ws://localhost:8443');
 
   const state     = telemetry?.state ?? 0;
   const stateColor = STATE_COLORS[state] ?? '#4a8a54';
   const isFailSafe = state === 3;
   const isSafe     = !isFailSafe && status === 'connected';
+  const rangeScanActive = tasks.some((task) => task.name.startsWith('RngS'));
 
   function setSystemState(s: 'idle' | 'search' | 'track') {
     send({ type: 'cmd.set_state', targetState: s });
@@ -98,7 +99,11 @@ export default function Dashboard() {
         {/* LEFT — radar + state description */}
         <section className={styles.left}>
           <div className={styles.radarWrap}>
-            <RadarDisplay state={state} />
+            <RadarDisplay
+              state={state}
+              rangeScan={rangeScanActive ? rangeScan : null}
+              rangeScanActive={rangeScanActive}
+            />
           </div>
 
           <NlpCommandPanel

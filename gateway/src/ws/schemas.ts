@@ -128,6 +128,15 @@ export interface EvtTaskList {
   tasks: PackedTaskEntry[];
 }
 
+export interface EvtRangeScan {
+  type:         'evt.range_scan';
+  angle_deg:    number;
+  distance_cm:  number;
+  locked:       boolean;
+  valid:        boolean;
+  threshold_cm: number;
+}
+
 export interface EvtDetection {
   type:       'evt.detection';
   class_id:   number;
@@ -146,6 +155,7 @@ export type OutboundEvent =
   | EvtAck
   | EvtError
   | EvtTaskList
+  | EvtRangeScan
   | EvtDetection;
 
 /** Wrap an event in the standard envelope. */

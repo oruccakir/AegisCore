@@ -121,6 +121,20 @@ export class Bridge {
         break;
       }
 
+      case CmdId.RangeScanReport:
+        if (frame.payload.length >= 6) {
+          const flags = frame.payload[3] ?? 0;
+          this.ws.broadcast({
+            type: 'evt.range_scan',
+            angle_deg: frame.payload[0] ?? 0,
+            distance_cm: frame.payload.readUInt16LE(1),
+            locked: (flags & 0x01) !== 0,
+            valid: (flags & 0x02) !== 0,
+            threshold_cm: frame.payload.readUInt16LE(4),
+          });
+        }
+        break;
+
       case CmdId.FaultReport:
         this.ws.broadcast({
           type:              'evt.fault_report',
