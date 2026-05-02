@@ -32,6 +32,7 @@ Each document explains **what** each file does, **why** it exists, and **how eve
 | [20_version.md](20_version.md) | Firmware version constants injected at build time |
 | [21_bsp_interrupts.md](21_bsp_interrupts.md) | ISR table, SysTick, FreeRTOS hooks (freertos_hooks.cpp + stm32f4xx_it.c) |
 | [22_freertos_config.md](22_freertos_config.md) | FreeRTOS kernel configuration |
+| [23_freertos_task_model.md](23_freertos_task_model.md) | FreeRTOS task model |
 
 ---
 
