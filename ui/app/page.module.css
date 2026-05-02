@@ -195,7 +195,9 @@
 }
 
 .nlpStatus[data-action="get_version"],
-.nlpStatus[data-action="manual_lock"] {
+.nlpStatus[data-action="manual_lock"],
+.nlpStatus[data-action="create_task"],
+.nlpStatus[data-action="delete_task"] {
   color: var(--green);
 }
 

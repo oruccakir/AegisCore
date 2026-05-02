@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { DetectionInfo, OutCmd, useAC2Socket } from '@/hooks/useAC2Socket';
+import { DetectionInfo, OutCmd, TaskInfo, useAC2Socket } from '@/hooks/useAC2Socket';
 import RadarDisplay from '@/components/RadarDisplay';
 import EventLog from '@/components/EventLog';
 import TaskMonitor from '@/components/TaskMonitor';
@@ -26,7 +26,7 @@ type NlpProvider = 'gemini' | 'ollama';
 interface NlpCommandResponse {
   provider: NlpProvider;
   model: string;
-  action: 'get_version' | 'manual_lock' | 'unsupported';
+  action: 'get_version' | 'manual_lock' | 'create_task' | 'delete_task' | 'unsupported';
   safe_to_send: boolean;
   gateway_command: OutCmd | null;
   confidence: number;
@@ -108,6 +108,7 @@ export default function Dashboard() {
 
           <NlpCommandPanel
             connected={status === 'connected'}
+            tasks={tasks}
             send={send}
           />
 
@@ -209,8 +210,9 @@ export default function Dashboard() {
   );
 }
 
-function NlpCommandPanel({ connected, send }: {
+function NlpCommandPanel({ connected, tasks, send }: {
   connected: boolean;
+  tasks: TaskInfo[];
   send: (cmd: OutCmd) => void;
 }) {
   const [provider, setProvider] = useState<NlpProvider>('ollama');
@@ -265,6 +267,10 @@ function NlpCommandPanel({ connected, send }: {
         text: trimmed,
         provider,
         model,
+        active_tasks: tasks.map((task) => ({
+          name: task.name,
+          task_id: task.task_id,
+        })),
         api_key: provider === 'gemini' && apiKey ? apiKey : undefined,
         ollama_url: provider === 'ollama' ? ollamaUrl : undefined,
       });
@@ -342,7 +348,7 @@ function NlpCommandPanel({ connected, send }: {
         className={styles.nlpText}
         value={text}
         onChange={(evt) => setText(evt.target.value)}
-        placeholder="GET VERSION / MANUAL LOCK"
+        placeholder="START RANGE SCAN AT 40 CM / STOP RANGE SCAN / GET VERSION"
         rows={4}
       />
 
