@@ -8,6 +8,7 @@
 #include "button_classifier.hpp"
 #include "fail_safe_supervisor.hpp"
 #include "hmac_sha256.hpp"
+#include "lcd_driver.hpp"
 #include "mpu_config.hpp"
 #include "platform_io.hpp"
 #include "post.hpp"
@@ -75,7 +76,8 @@ struct RemoteCmd
 
 enum class UserTaskType : std::uint8_t {
     Blink = 0U,
-    RangeScan = 3U
+    RangeScan = 3U,
+    LcdStatus = 4U
 };
 
 struct UserTaskSlot {
@@ -141,6 +143,12 @@ struct LastDetection {
     bool          valid          = false;
 };
 LastDetection gLastDetection = {};
+
+volatile std::uint8_t  gLcdState       = 0U;
+volatile std::uint16_t gLcdCpuLoadX10  = 0U;
+volatile std::uint8_t  gLcdHbMissCount = 0U;
+volatile std::uint8_t  gLcdTaskCount   = 0U;
+volatile std::uint32_t gLcdUptimeMs    = 0U;
 
 // Yellow LED off time — set when ManualLock arrives, cleared by StateMachineTask.
 std::uint32_t gManualLockLedOffMs = 0U;
@@ -300,6 +308,93 @@ void UserRangeScanTask(void* ctx) noexcept
     }
 }
 
+const char* StateShortName(std::uint8_t state) noexcept
+{
+    switch (state) {
+        case 0U: return "IDLE";
+        case 1U: return "SRCH";
+        case 2U: return "TRCK";
+        case 3U: return "SAFE";
+        default: return "UNKN";
+    }
+}
+
+void FillLine(char* line) noexcept
+{
+    for (std::uint8_t i = 0U; i < 16U; ++i) {
+        line[i] = ' ';
+    }
+    line[16U] = '\0';
+}
+
+void PutText(char* line, std::uint8_t pos, const char* text) noexcept
+{
+    while (pos < 16U && *text != '\0') {
+        line[pos] = *text;
+        ++pos;
+        ++text;
+    }
+}
+
+void Put2(char* line, std::uint8_t pos, std::uint32_t value) noexcept
+{
+    const std::uint32_t clamped = (value > 99U) ? 99U : value;
+    line[pos] = static_cast<char>('0' + (clamped / 10U));
+    line[static_cast<std::uint8_t>(pos + 1U)] =
+        static_cast<char>('0' + (clamped % 10U));
+}
+
+void PutCpu(char* line, std::uint8_t pos, std::uint16_t cpu_x10) noexcept
+{
+    const std::uint16_t clamped = (cpu_x10 > 999U) ? 999U : cpu_x10;
+    const std::uint16_t whole = static_cast<std::uint16_t>(clamped / 10U);
+    line[pos] = (whole >= 10U) ? static_cast<char>('0' + (whole / 10U)) : ' ';
+    line[static_cast<std::uint8_t>(pos + 1U)] = static_cast<char>('0' + (whole % 10U));
+    line[static_cast<std::uint8_t>(pos + 2U)] = '.';
+    line[static_cast<std::uint8_t>(pos + 3U)] = static_cast<char>('0' + (clamped % 10U));
+}
+
+void UserLcdStatusTask(void* ctx) noexcept
+{
+    const auto* slot = static_cast<const UserTaskSlot*>(ctx);
+    const TickType_t refresh_ticks = pdMS_TO_TICKS(
+        static_cast<std::uint32_t>(slot->param > 0U ? slot->param : 4U) * 250U);
+
+    if (!InitializeLcd()) {
+        vTaskDelete(nullptr);
+    }
+
+    LcdWriteLines("AEGIS CORE", "LCD ONLINE");
+    vTaskDelay(pdMS_TO_TICKS(1500U));
+
+    for (;;) {
+        char line0[17] = {};
+        char line1[17] = {};
+        FillLine(line0);
+        FillLine(line1);
+
+        const std::uint32_t uptime_s = gLcdUptimeMs / 1000U;
+        const std::uint32_t uptime_m = (uptime_s / 60U) % 100U;
+        const std::uint32_t uptime_r = uptime_s % 60U;
+
+        PutText(line0, 0U, "AC2");
+        PutText(line0, 4U, StateShortName(gLcdState));
+        Put2(line0, 10U, uptime_m);
+        line0[12U] = ':';
+        Put2(line0, 13U, uptime_r);
+
+        PutText(line1, 0U, "CPU");
+        PutCpu(line1, 4U, gLcdCpuLoadX10);
+        PutText(line1, 9U, "HB");
+        line1[11U] = static_cast<char>('0' + ((gLcdHbMissCount > 9U) ? 9U : gLcdHbMissCount));
+        PutText(line1, 13U, "T");
+        Put2(line1, 14U, gLcdTaskCount);
+
+        LcdWriteLines(line0, line1);
+        vTaskDelay(refresh_ticks);
+    }
+}
+
 static std::int8_t CreateUserTask(std::uint8_t type, std::uint8_t param) noexcept
 {
     for (std::uint8_t i = 0U; i < kUserTaskSlots; ++i) {
@@ -318,6 +413,11 @@ static std::int8_t CreateUserTask(std::uint8_t type, std::uint8_t param) noexcep
                 fn       = UserRangeScanTask;
                 tname[0] = 'R'; tname[1] = 'n'; tname[2] = 'g'; tname[3] = 'S';
                 tname[4] = static_cast<char>('0' + i);
+                break;
+            case UserTaskType::LcdStatus:
+                fn       = UserLcdStatusTask;
+                tname[0] = 'L'; tname[1] = 'C'; tname[2] = 'D';
+                tname[3] = static_cast<char>('0' + i);
                 break;
             default:
                 return -1;
@@ -363,6 +463,10 @@ static bool DeleteUserTask(std::uint8_t slot_index) noexcept
 
     if (gUserTasks[slot_index].task_type == UserTaskType::RangeScan) {
         aegis::edge::SetServoAngleDegrees(90U);
+    }
+
+    if (gUserTasks[slot_index].task_type == UserTaskType::LcdStatus) {
+        LcdClear();
     }
 
     return true;
@@ -545,6 +649,7 @@ static void QueueTaskList() noexcept
     const UBaseType_t n = uxTaskGetSystemState(gTaskStatusBuf, kMaxTaskCount, &total_rt);
     const std::uint8_t count =
         static_cast<std::uint8_t>(n > kMaxTaskCount ? kMaxTaskCount : n);
+    gLcdTaskCount = count;
 
     constexpr std::uint8_t kEntry =
         static_cast<std::uint8_t>(sizeof(PackedTaskEntry));
@@ -622,6 +727,10 @@ static void QueueTelemetryTick(const StateMachine& sm) noexcept
     p.stack_tel_tx      = static_cast<std::uint16_t>(uxTaskGetStackHighWaterMark(gTxHandle));
     p.stack_heartbeat   = static_cast<std::uint16_t>(uxTaskGetStackHighWaterMark(gHbHandle));
     p.hb_miss_count     = FailSafeSupervisor::Instance().HeartbeatMissCount();
+    gLcdState           = p.state;
+    gLcdCpuLoadX10      = p.cpu_load_x10;
+    gLcdHbMissCount     = p.hb_miss_count;
+    gLcdUptimeMs        = MillisecondsSinceBoot();
     QueueTx(CmdId::kTelemetryTick,
             reinterpret_cast<const std::uint8_t*>(&p),
             static_cast<std::uint8_t>(sizeof(p)));

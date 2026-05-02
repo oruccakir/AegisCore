@@ -81,14 +81,14 @@ COMMAND_PLAN_SCHEMA: dict[str, Any] = {
         },
         "task_type": {
             "type": ["integer", "null"],
-            "enum": [0, 3, None],
-            "description": "For create_task only: 0=BLINK, 3=RANGE_SCAN. Null otherwise.",
+            "enum": [0, 3, 4, None],
+            "description": "For create_task only: 0=BLINK, 3=RANGE_SCAN, 4=LCD_STATUS. Null otherwise.",
         },
         "param": {
             "type": ["integer", "null"],
             "minimum": 0,
             "maximum": 255,
-            "description": "For create_task only. BLINK uses half-period x100ms, RANGE_SCAN threshold cm. Null otherwise.",
+            "description": "For create_task only. BLINK uses half-period x100ms, RANGE_SCAN threshold cm, LCD_STATUS refresh x250ms. Null otherwise.",
         },
         "slot_index": {
             "type": ["integer", "null"],
@@ -124,6 +124,8 @@ Allowed task types:
 - BLINK / blink LED / sari isik blink: task_type=0. Param is half-period in 100 ms units. Default 5.
 - RANGE_SCAN / radar / servo scan / ultrasonic scan / uzaklik sensoru tarama: task_type=3.
   Param is near threshold in centimeters. Default 30. Clamp to 5..150 unless explicit safe range is provided.
+- LCD_STATUS / lcd / display / ekran durum: task_type=4.
+  Param is refresh period in 250 ms units. Default 4.
 
 Safety rules:
 - Output only JSON that matches the provided schema.
@@ -454,13 +456,15 @@ def _validate_command_plan(raw: dict[str, Any]) -> CommandPlan:
         if plan.task_type is None or plan.param is None:
             return _unsupported_plan(confidence, "Missing task type or parameter.")
         task_type = int(plan.task_type)
-        if task_type not in (0, 3):
+        if task_type not in (0, 3, 4):
             return _unsupported_plan(confidence, "Unsupported task type.")
         param = max(0, min(255, int(plan.param)))
         if task_type == 3:
             param = 30 if param == 0 else max(5, min(150, param))
         elif task_type == 0:
             param = 5 if param == 0 else param
+        elif task_type == 4:
+            param = 4 if param == 0 else max(1, min(40, param))
         return CommandPlan(action="create_task", lock=None, task_type=task_type, param=param,
                            slot_index=None, confidence=confidence, reason=reason)
     if plan.action == "delete_task":

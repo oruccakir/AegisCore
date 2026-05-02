@@ -151,7 +151,7 @@ export default function NlpCommandPanel({ connected, tasks, send }: Props) {
         className={styles.nlpText}
         value={text}
         onChange={(evt) => setText(evt.target.value)}
-        placeholder="START RANGE SCAN AT 40 CM / STOP RANGE SCAN / GET VERSION"
+        placeholder="START RANGE SCAN AT 40 CM / START LCD STATUS / GET VERSION"
         rows={4}
       />
 

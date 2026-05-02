@@ -12,11 +12,12 @@ const TASK_STATE: Record<number, string> = {
   0: 'RUNNING', 1: 'READY', 2: 'BLOCKED', 3: 'SUSP', 4: 'DELETED',
 };
 
-type TaskType = 0 | 3;
+type TaskType = 0 | 3 | 4;
 
 const TASK_TYPE_LABELS: Record<TaskType, string> = {
   0: 'BLINK',
   3: 'RANGE SCAN',
+  4: 'LCD STATUS',
 };
 
 const PARAM_META: Record<TaskType, { label: string; hint: (p: number) => string }> = {
@@ -27,6 +28,10 @@ const PARAM_META: Record<TaskType, { label: string; hint: (p: number) => string 
   3: {
     label: 'near threshold (cm)',
     hint:  (p) => `servo scans until an object is within ${p > 0 ? p : 30} cm`,
+  },
+  4: {
+    label: 'refresh period (×250 ms)',
+    hint:  (p) => `LCD refreshes every ${(p > 0 ? p : 4) * 250} ms`,
   },
 };
 
@@ -44,6 +49,8 @@ export default function TaskMonitor({ tasks, send }: Props) {
     setNewType(taskType);
     if (taskType === 3 && newParam < 10) {
       setNewParam(30);
+    } else if (taskType === 4) {
+      setNewParam(4);
     } else if (taskType !== 3 && newParam === 30) {
       setNewParam(5);
     }

@@ -66,6 +66,7 @@ set(APP_SOURCES
     app/fail_safe_supervisor.cpp
     app/freertos_hooks.cpp
     app/hmac_sha256.cpp
+    app/lcd_driver.cpp
     app/main.cpp
     app/platform_io.cpp
     app/post.cpp
@@ -159,6 +160,7 @@ set_source_files_properties(
     app/fail_safe_supervisor.cpp
     app/freertos_hooks.cpp
     app/hmac_sha256.cpp
+    app/lcd_driver.cpp
     app/main.cpp
     app/platform_io.cpp
     app/post.cpp
