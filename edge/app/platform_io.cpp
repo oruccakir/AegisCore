@@ -11,6 +11,7 @@ constexpr std::uint16_t kGreenLedPin  = GPIO_PIN_12;
 constexpr std::uint16_t kBlueLedPin   = GPIO_PIN_15;
 constexpr std::uint16_t kRedLedPin    = GPIO_PIN_14;
 constexpr std::uint16_t kUserButtonPin = GPIO_PIN_0;
+constexpr std::uint16_t kJoystickSwitchPin = GPIO_PIN_1;
 constexpr std::uint32_t kButtonIrqPriority = 6U;
 constexpr std::uint32_t kServoPin = GPIO_PIN_7;
 constexpr std::uint32_t kServoTimerChannel = TIM_CHANNEL_2;
@@ -23,6 +24,7 @@ constexpr std::uint32_t kRangeEchoTimeoutUs = 30000U;
 
 GPIO_TypeDef* const kLedPort = GPIOD;
 GPIO_TypeDef* const kButtonPort = GPIOA;
+GPIO_TypeDef* const kJoystickPort = GPIOB;
 GPIO_TypeDef* const kServoPort = GPIOB;
 GPIO_TypeDef* const kRangePort = GPIOB;
 
@@ -76,6 +78,7 @@ void GpioInit()
 {
     __HAL_RCC_GPIOD_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
 
     GPIO_InitTypeDef gpio = {};
     gpio.Pin = kGreenLedPin | kBlueLedPin | kRedLedPin | kYellowLedPin;
@@ -94,10 +97,21 @@ void GpioInit()
 
     HAL_NVIC_SetPriority(EXTI0_IRQn, kButtonIrqPriority, 0U);
     HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+    gpio = {};
+    gpio.Pin = kJoystickSwitchPin;
+    gpio.Mode = GPIO_MODE_IT_FALLING;
+    gpio.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(kJoystickPort, &gpio);
+
+    HAL_NVIC_SetPriority(EXTI1_IRQn, kButtonIrqPriority, 0U);
+    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 }
 
 aegis::edge::ButtonEdgeCallback g_button_cb  = nullptr;
 void*                           g_button_ctx = nullptr;
+aegis::edge::JoystickPressCallback g_joystick_cb  = nullptr;
+void*                              g_joystick_ctx = nullptr;
 
 } // namespace
 
@@ -255,6 +269,11 @@ bool ReadButtonPressed()
     return HAL_GPIO_ReadPin(kButtonPort, kUserButtonPin) == GPIO_PIN_SET;
 }
 
+bool ReadJoystickPressed()
+{
+    return HAL_GPIO_ReadPin(kJoystickPort, kJoystickSwitchPin) == GPIO_PIN_RESET;
+}
+
 void SetServoAngleDegrees(std::uint8_t angle_degrees) noexcept
 {
     const std::uint32_t clamped = (angle_degrees > 180U) ? 180U : angle_degrees;
@@ -280,6 +299,12 @@ void SetButtonEdgeCallback(ButtonEdgeCallback cb, void* ctx) noexcept
     g_button_ctx = ctx;
 }
 
+void SetJoystickPressCallback(JoystickPressCallback cb, void* ctx) noexcept
+{
+    g_joystick_cb  = cb;
+    g_joystick_ctx = ctx;
+}
+
 } // namespace aegis::edge
 
 extern "C" void Aegis_HandleExti0Irq(void)
@@ -287,10 +312,19 @@ extern "C" void Aegis_HandleExti0Irq(void)
     HAL_GPIO_EXTI_IRQHandler(kUserButtonPin);
 }
 
+extern "C" void Aegis_HandleExti1Irq(void)
+{
+    HAL_GPIO_EXTI_IRQHandler(kJoystickSwitchPin);
+}
+
 extern "C" void HAL_GPIO_EXTI_Callback(uint16_t gpio_pin)
 {
     if (gpio_pin == kUserButtonPin && g_button_cb != nullptr)
     {
         g_button_cb(g_button_ctx);
+    }
+    else if (gpio_pin == kJoystickSwitchPin && g_joystick_cb != nullptr)
+    {
+        g_joystick_cb(g_joystick_ctx);
     }
 }

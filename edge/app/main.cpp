@@ -39,6 +39,7 @@ constexpr std::uint32_t  kStackHeartbeat   = 256U;
 
 // ---- Queue depths -----------------------------------------------------------
 constexpr std::uint32_t kButtonQueueLen   = 8U;
+constexpr std::uint32_t kJoystickQueueLen = 4U;
 constexpr std::uint32_t kTxQueueLen       = 4U;
 constexpr std::uint32_t kRemoteCmdQueueLen= 4U;
 
@@ -115,13 +116,16 @@ StackType_t  gHbStack[kStackHeartbeat];
 
 // ---- Static queue storage ---------------------------------------------------
 StaticQueue_t                               gButtonQueueCB;
+StaticQueue_t                               gJoystickQueueCB;
 StaticQueue_t                               gTxQueueCB;
 StaticQueue_t                               gRemoteCmdQueueCB;
 std::array<RawButtonEdge, kButtonQueueLen>  gButtonQueueStorage  = {};
+std::array<std::uint32_t, kJoystickQueueLen> gJoystickQueueStorage = {};
 std::array<TxItem,        kTxQueueLen>      gTxQueueStorage      = {};
 std::array<RemoteCmd,     kRemoteCmdQueueLen> gRemoteCmdQueueStorage = {};
 
 QueueHandle_t gButtonQueue    = nullptr;
+QueueHandle_t gJoystickQueue  = nullptr;
 QueueHandle_t gTxQueue        = nullptr;
 QueueHandle_t gRemoteCmdQueue = nullptr;
 
@@ -241,6 +245,10 @@ static void PulseFeedback(std::uint8_t event_code) noexcept
             break;
         case AuditCode::kVisionHit:
             gDetectionLedOffMs = until_ms;
+            break;
+        case AuditCode::kJoystickPress:
+            gGreenPulseOffMs = until_ms;
+            gYellowPulseOffMs = until_ms;
             break;
         case AuditCode::kSystemReset:
         case AuditCode::kFailSafe:
@@ -540,6 +548,11 @@ void RenderAlertPage(char* line0, char* line1, std::uint8_t code, std::uint16_t 
         case AuditCode::kFailSafe:
             PutText(line0, 6U, "FAIL SAFE");
             PutText(line1, 0U, "LOCK ACTIVE");
+            break;
+        case AuditCode::kJoystickPress:
+            PutText(line0, 6U, "JOY PRESS");
+            PutText(line1, 0U, "COUNT");
+            Put3(line1, 6U, value);
             break;
         default:
             PutText(line0, 6U, "UNKNOWN");
@@ -1092,6 +1105,33 @@ static void OnButtonEdge(void* ctx) noexcept
     portYIELD_FROM_ISR(woken);
 }
 
+static void OnJoystickPress(void* ctx) noexcept
+{
+    const std::uint32_t timestamp_ms = MillisecondsSinceBoot();
+    BaseType_t woken = pdFALSE;
+    (void)xQueueSendFromISR(static_cast<QueueHandle_t>(ctx), &timestamp_ms, &woken);
+    portYIELD_FROM_ISR(woken);
+}
+
+static void DrainJoystickEvents(std::uint32_t& last_press_ms,
+                                std::uint16_t& press_count) noexcept
+{
+    constexpr std::uint32_t kDebounceMs = 150U;
+
+    std::uint32_t press_ms = 0U;
+    while (xQueueReceive(gJoystickQueue, &press_ms, 0U) == pdPASS)
+    {
+        if (last_press_ms != 0U && (press_ms - last_press_ms) < kDebounceMs)
+        {
+            continue;
+        }
+
+        last_press_ms = press_ms;
+        press_count = static_cast<std::uint16_t>(press_count + 1U);
+        SetLcdAlert(AuditCode::kJoystickPress, press_count);
+    }
+}
+
 // ---- Tasks ------------------------------------------------------------------
 
 void UartRxTask(void* /*ctx*/)
@@ -1124,6 +1164,8 @@ void StateMachineTask(void* /*ctx*/)
     TickType_t next_telemetry_tick = xTaskGetTickCount() + kTelemetryPeriodTicks;
     TickType_t next_tasklist_tick  = xTaskGetTickCount() + kTaskListPeriodTicks;
     bool fail_safe_announced = false;
+    std::uint32_t last_joystick_press_ms = 0U;
+    std::uint16_t joystick_press_count = 0U;
 
     ApplyLedOutputs(sm.GetLedOutputs(MillisecondsSinceBoot()));
     QueueBootReport();
@@ -1151,6 +1193,8 @@ void StateMachineTask(void* /*ctx*/)
         {
             DispatchRemoteCmd(sm, rcmd);
         }
+
+        DrainJoystickEvents(last_joystick_press_ms, joystick_press_count);
 
         const TickType_t now_ticks = xTaskGetTickCount();
         const TickType_t wait =
@@ -1286,6 +1330,13 @@ extern "C" int main()
         &gButtonQueueCB);
     configASSERT(gButtonQueue != nullptr);
 
+    gJoystickQueue = xQueueCreateStatic(
+        kJoystickQueueLen,
+        sizeof(std::uint32_t),
+        reinterpret_cast<std::uint8_t*>(gJoystickQueueStorage.data()),
+        &gJoystickQueueCB);
+    configASSERT(gJoystickQueue != nullptr);
+
     gTxQueue = xQueueCreateStatic(
         kTxQueueLen,
         sizeof(TxItem),
@@ -1301,6 +1352,7 @@ extern "C" int main()
     configASSERT(gRemoteCmdQueue != nullptr);
 
     aegis::edge::SetButtonEdgeCallback(OnButtonEdge, gButtonQueue);
+    aegis::edge::SetJoystickPressCallback(OnJoystickPress, gJoystickQueue);
 
     gUartRxHandle = xTaskCreateStatic(UartRxTask, "UartRx",
         kStackUartRx, nullptr, kPrioUartRx, gUartRxStack, &gUartRxTCB);

@@ -11,6 +11,7 @@
 #include "stm32f4xx_hal.h"
 
 extern void Aegis_HandleExti0Irq(void);
+extern void Aegis_HandleExti1Irq(void);
 extern void xPortSysTickHandler(void);
 
 // Fault handlers are in bsp/fault_stubs.c (naked trampolines → Panic_HardFaultImpl).
@@ -24,6 +25,11 @@ void DebugMon_Handler(void) { }
 void EXTI0_IRQHandler(void)
 {
     Aegis_HandleExti0Irq();
+}
+
+void EXTI1_IRQHandler(void)
+{
+    Aegis_HandleExti1Irq();
 }
 
 void USART2_IRQHandler(void)

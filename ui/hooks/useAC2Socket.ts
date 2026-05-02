@@ -80,6 +80,7 @@ const AUDIT_EVENTS: Record<number, string> = {
   5: 'VISION HIT',
   6: 'SYSTEM RESET',
   7: 'FAIL SAFE',
+  8: 'JOYSTICK PRESS',
 };
 
 function decodeBootReason(bits: number): string {

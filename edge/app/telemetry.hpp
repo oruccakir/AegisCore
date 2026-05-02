@@ -60,6 +60,7 @@ namespace AuditCode {
     inline constexpr std::uint8_t kVisionHit   = 0x05U;
     inline constexpr std::uint8_t kSystemReset = 0x06U;
     inline constexpr std::uint8_t kFailSafe    = 0x07U;
+    inline constexpr std::uint8_t kJoystickPress = 0x08U;
 }
 
 // Payload structs — all fields little-endian.
