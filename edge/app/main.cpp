@@ -73,7 +73,12 @@ struct RemoteCmd
 
 // ---- User task infrastructure -----------------------------------------------
 
-enum class UserTaskType : std::uint8_t { Blink = 0U, Counter = 1U, Load = 2U };
+enum class UserTaskType : std::uint8_t {
+    Blink = 0U,
+    Counter = 1U,
+    Load = 2U,
+    RangeScan = 3U
+};
 
 struct UserTaskSlot {
     StaticTask_t  tcb;
@@ -85,7 +90,7 @@ struct UserTaskSlot {
 };
 
 constexpr std::uint8_t kUserTaskSlots = 4U;
-constexpr UBaseType_t  kMaxTaskCount  = 9U; // 4 system + IDLE + 4 user
+constexpr UBaseType_t  kMaxTaskCount  = 9U; // Telemetry payload cap: up to 9 reported tasks.
 
 UserTaskSlot  gUserTasks[kUserTaskSlots]       = {};
 TaskStatus_t  gTaskStatusBuf[kMaxTaskCount]    = {};
@@ -211,13 +216,87 @@ void UserLoadTask(void* ctx) noexcept
     }
 }
 
+void UserRangeScanTask(void* ctx) noexcept
+{
+    const auto* slot = static_cast<const UserTaskSlot*>(ctx);
+    const std::uint16_t near_threshold_cm =
+        static_cast<std::uint16_t>(slot->param > 0U ? slot->param : 30U);
+    constexpr std::uint8_t kMinAngle = 20U;
+    constexpr std::uint8_t kMaxAngle = 160U;
+    constexpr std::uint8_t kStepDegrees = 2U;
+    constexpr std::uint8_t kMeasureEverySteps = 3U;
+    constexpr TickType_t kStepDelay = pdMS_TO_TICKS(40U);
+    constexpr TickType_t kLockDelay = pdMS_TO_TICKS(80U);
+    constexpr std::uint8_t kLostSamplesToRelease = 6U;
+
+    std::uint8_t angle = 90U;
+    bool increasing = true;
+    bool locked = false;
+    std::uint8_t locked_angle = angle;
+    std::uint8_t step_count = 0U;
+    std::uint8_t lost_samples = 0U;
+
+    for (;;)
+    {
+        if (locked) {
+            aegis::edge::SetServoAngleDegrees(locked_angle);
+
+            std::uint16_t distance_cm = 0U;
+            const bool valid = aegis::edge::MeasureRangeCm(distance_cm);
+            if (valid && distance_cm <= static_cast<std::uint16_t>(near_threshold_cm + 5U)) {
+                lost_samples = 0U;
+            } else {
+                lost_samples = static_cast<std::uint8_t>(lost_samples + 1U);
+                if (lost_samples >= kLostSamplesToRelease) {
+                    locked = false;
+                    lost_samples = 0U;
+                    angle = locked_angle;
+                }
+            }
+
+            vTaskDelay(kLockDelay);
+            continue;
+        }
+
+        aegis::edge::SetServoAngleDegrees(angle);
+        vTaskDelay(kStepDelay);
+        step_count = static_cast<std::uint8_t>(step_count + 1U);
+
+        if (step_count >= kMeasureEverySteps) {
+            step_count = 0U;
+            std::uint16_t distance_cm = 0U;
+            const bool valid = aegis::edge::MeasureRangeCm(distance_cm);
+            if (valid && distance_cm <= near_threshold_cm) {
+                locked = true;
+                locked_angle = angle;
+                lost_samples = 0U;
+                vTaskDelay(kLockDelay);
+                continue;
+            }
+        }
+
+        if (increasing) {
+            if (angle >= static_cast<std::uint8_t>(kMaxAngle - kStepDegrees)) {
+                angle = kMaxAngle;
+                increasing = false;
+            } else {
+                angle = static_cast<std::uint8_t>(angle + kStepDegrees);
+            }
+        } else {
+            if (angle <= static_cast<std::uint8_t>(kMinAngle + kStepDegrees)) {
+                angle = kMinAngle;
+                increasing = true;
+            } else {
+                angle = static_cast<std::uint8_t>(angle - kStepDegrees);
+            }
+        }
+    }
+}
+
 static std::int8_t CreateUserTask(std::uint8_t type, std::uint8_t param) noexcept
 {
     for (std::uint8_t i = 0U; i < kUserTaskSlots; ++i) {
         if (gUserTasks[i].in_use) { continue; }
-
-        gUserTasks[i].task_type = static_cast<UserTaskType>(type);
-        gUserTasks[i].param     = param;
 
         TaskFunction_t fn = UserBlinkTask;
         char tname[configMAX_TASK_NAME_LEN] = {};
@@ -238,9 +317,17 @@ static std::int8_t CreateUserTask(std::uint8_t type, std::uint8_t param) noexcep
                 tname[0] = 'L'; tname[1] = 'o'; tname[2] = 'a'; tname[3] = 'd';
                 tname[4] = static_cast<char>('0' + i);
                 break;
+            case UserTaskType::RangeScan:
+                fn       = UserRangeScanTask;
+                tname[0] = 'R'; tname[1] = 'n'; tname[2] = 'g'; tname[3] = 'S';
+                tname[4] = static_cast<char>('0' + i);
+                break;
             default:
                 return -1;
         }
+
+        gUserTasks[i].task_type = static_cast<UserTaskType>(type);
+        gUserTasks[i].param     = param;
 
         const std::uint32_t depth =
             static_cast<std::uint32_t>(sizeof(gUserTasks[i].stack) / sizeof(StackType_t));
@@ -275,6 +362,10 @@ static bool DeleteUserTask(std::uint8_t slot_index) noexcept
             }
         }
         if (!any_blink) { gUserBlinkState = false; }
+    }
+
+    if (gUserTasks[slot_index].task_type == UserTaskType::RangeScan) {
+        aegis::edge::SetServoAngleDegrees(90U);
     }
 
     return true;
@@ -740,6 +831,9 @@ extern "C" int main()
 
     if (!gUart.Init()) { while (true) { } }
     gParser.SetCallback(OnAC2Frame, nullptr);
+
+    if (!aegis::edge::InitializeRangeSensor()) { while (true) { } }
+    if (!aegis::edge::InitializeServoPwm()) { while (true) { } }
 
     gButtonQueue = xQueueCreateStatic(
         kButtonQueueLen,

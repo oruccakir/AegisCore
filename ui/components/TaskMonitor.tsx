@@ -12,9 +12,16 @@ const TASK_STATE: Record<number, string> = {
   0: 'RUNNING', 1: 'READY', 2: 'BLOCKED', 3: 'SUSP', 4: 'DELETED',
 };
 
-const TASK_TYPE_LABELS = ['BLINK', 'COUNTER', 'LOAD'];
+type TaskType = 0 | 1 | 2 | 3;
 
-const PARAM_META: Record<0 | 1 | 2, { label: string; hint: (p: number) => string }> = {
+const TASK_TYPE_LABELS: Record<TaskType, string> = {
+  0: 'BLINK',
+  1: 'COUNTER',
+  2: 'LOAD',
+  3: 'RANGE SCAN',
+};
+
+const PARAM_META: Record<TaskType, { label: string; hint: (p: number) => string }> = {
   0: {
     label: 'half-period (×100 ms)',
     hint:  (p) => `LED toggles every ${p * 100} ms → ${p > 0 ? (1000 / (p * 100)).toFixed(2) : '∞'} Hz`,
@@ -27,16 +34,29 @@ const PARAM_META: Record<0 | 1 | 2, { label: string; hint: (p: number) => string
     label: 'spin multiplier (×10 000)',
     hint:  (p) => `busy-wait ~${(p * 10000 * 20 / 1_000_000).toFixed(1)} ms / 100 ms window`,
   },
+  3: {
+    label: 'near threshold (cm)',
+    hint:  (p) => `servo scans until an object is within ${p > 0 ? p : 20} cm`,
+  },
 };
 
 export default function TaskMonitor({ tasks, send }: Props) {
-  const [newType,  setNewType]  = useState<0 | 1 | 2>(0);
+  const [newType,  setNewType]  = useState<TaskType>(0);
   const [newParam, setNewParam] = useState(5);
 
   const meta = PARAM_META[newType];
 
   function createTask() {
     send({ type: 'cmd.create_task', task_type: newType, param: newParam });
+  }
+
+  function selectTaskType(taskType: TaskType) {
+    setNewType(taskType);
+    if (taskType === 3 && newParam < 10) {
+      setNewParam(30);
+    } else if (taskType !== 3 && newParam === 30) {
+      setNewParam(5);
+    }
   }
 
   function deleteTask(slotIndex: number) {
@@ -91,9 +111,9 @@ export default function TaskMonitor({ tasks, send }: Props) {
           <select
             className={styles.select}
             value={newType}
-            onChange={(e) => setNewType(Number(e.target.value) as 0 | 1 | 2)}>
-            {TASK_TYPE_LABELS.map((label, i) => (
-              <option key={label} value={i}>{label}</option>
+            onChange={(e) => selectTaskType(Number(e.target.value) as TaskType)}>
+            {(Object.keys(TASK_TYPE_LABELS) as Array<`${TaskType}`>).map((key) => (
+              <option key={key} value={key}>{TASK_TYPE_LABELS[Number(key) as TaskType]}</option>
             ))}
           </select>
           <div className={styles.paramWrap}>

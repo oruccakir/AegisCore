@@ -32,7 +32,7 @@ export const CmdHeartbeatSchema = z.object({
 
 export const CmdCreateTaskSchema = z.object({
   type:      z.literal('cmd.create_task'),
-  task_type: z.number().int().min(0).max(2), // 0=BLINK, 1=COUNTER, 2=LOAD
+  task_type: z.number().int().min(0).max(3), // 0=BLINK, 1=COUNTER, 2=LOAD, 3=RANGE_SCAN
   param:     z.number().int().min(0).max(255),
 });
 
