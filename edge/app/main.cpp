@@ -4,6 +4,8 @@
 #include "queue.h"
 #include "task.h"
 
+#include "stm32f4xx_hal.h"
+
 #include "ac2_framer.hpp"
 #include "button_classifier.hpp"
 #include "fail_safe_supervisor.hpp"
@@ -51,6 +53,7 @@ constexpr TickType_t    kSimulationPeriodTicks  = pdMS_TO_TICKS(100U);
 constexpr TickType_t    kHeartbeatPeriodTicks   = pdMS_TO_TICKS(1000U);
 constexpr TickType_t    kTelemetryPeriodTicks   = pdMS_TO_TICKS(1000U);
 constexpr TickType_t    kTaskListPeriodTicks    = pdMS_TO_TICKS(2000U);
+constexpr TickType_t    kSystemResetDelayTicks  = pdMS_TO_TICKS(250U);
 constexpr std::uint8_t  kDetectionClassNone     = 0U;
 constexpr std::uint8_t  kDetectionClassPerson   = 1U;
 constexpr std::uint8_t  kDetectionThresholdPct  = 50U;
@@ -160,6 +163,8 @@ volatile bool          gLcdRangeActive = false;
 volatile std::uint8_t  gLcdDetectClass = 0U;
 volatile std::uint8_t  gLcdDetectConf  = 0U;
 volatile bool          gLcdDetectSeen  = false;
+volatile bool          gSystemResetPending = false;
+TickType_t             gSystemResetDueTick = 0U;
 
 // Yellow LED off time — set when ManualLock arrives, cleared by StateMachineTask.
 std::uint32_t gManualLockLedOffMs = 0U;
@@ -663,8 +668,8 @@ static void OnAC2Frame(const AC2Frame& frame, void* /*ctx*/) noexcept
         return;
     }
 
-    // SAF-02: All other commands blocked in fail-safe.
-    if (FailSafeSupervisor::Instance().IsTriggered())
+    // SAF-02: Commands are blocked in fail-safe except explicit system reset.
+    if (FailSafeSupervisor::Instance().IsTriggered() && frame.cmd != CmdId::kSystemReset)
     {
         SendNack(frame.seq, ErrCode::kFailSafeLock);
         return;
@@ -724,6 +729,12 @@ static void DispatchRemoteCmd(StateMachine& sm,
                     reinterpret_cast<const std::uint8_t*>(&vr),
                     static_cast<std::uint8_t>(sizeof(vr)));
         }
+        break;
+
+    case CmdId::kSystemReset:
+        SendAck(rcmd.seq);
+        gSystemResetPending = true;
+        gSystemResetDueTick = xTaskGetTickCount() + kSystemResetDelayTicks;
         break;
 
     case CmdId::kDetectionResult: {
@@ -1003,6 +1014,11 @@ void StateMachineTask(void* /*ctx*/)
         leds.yellow_on = (gManualLockLedOffMs != 0U && now_led < gManualLockLedOffMs)
                          || static_cast<bool>(gUserBlinkState);
         ApplyLedOutputs(leds);
+
+        if (gSystemResetPending && xTaskGetTickCount() >= gSystemResetDueTick)
+        {
+            NVIC_SystemReset();
+        }
     }
 }
 

@@ -130,7 +130,7 @@ Allowed task types:
 Safety rules:
 - Output only JSON that matches the provided schema.
 - Accept Turkish or English phrasing.
-- Never unlock, release, disable, bypass, reset, flash, change system state,
+- Never unlock, release, disable, bypass, reset, reboot, restart, flash, change system state,
   alter safety behavior, or send raw UART/AC2 commands. Return unsupported for those.
 - For delete_task, use an explicit slot number from the request or resolve a named active task from context.
   If the target task is ambiguous or not active, return unsupported.

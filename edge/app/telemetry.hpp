@@ -13,6 +13,7 @@ namespace CmdId {
     inline constexpr std::uint8_t kVersionReport  = 0x02U;
     inline constexpr std::uint8_t kManualLock     = 0x11U;
     inline constexpr std::uint8_t kResetAck       = 0x12U;
+    inline constexpr std::uint8_t kSystemReset    = 0x13U;
     inline constexpr std::uint8_t kReportState    = 0x20U;
     inline constexpr std::uint8_t kTelemetryTick   = 0x21U;
     inline constexpr std::uint8_t kTaskList        = 0x22U;

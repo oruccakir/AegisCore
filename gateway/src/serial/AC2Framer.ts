@@ -16,6 +16,7 @@ export const CmdId = {
   VersionReport: 0x02,
   ManualLock:    0x11,
   ResetAck:      0x12,
+  SystemReset:   0x13,
   ReportState:   0x20,
   TelemetryTick: 0x21,
   TaskList:      0x22,

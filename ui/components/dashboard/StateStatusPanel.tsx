@@ -11,6 +11,12 @@ interface Props {
 export default function StateStatusPanel({ state, connected, send }: Props) {
   const stateColor = STATE_COLORS[state] ?? STATE_COLORS[0];
 
+  function requestSystemReset() {
+    if (window.confirm('Reset STM32 edge node?')) {
+      send({ type: 'cmd.system_reset' });
+    }
+  }
+
   return (
     <div className={styles.panel}>
       <div className={styles.panelTitle}>STATE STATUS</div>
@@ -51,6 +57,13 @@ export default function StateStatusPanel({ state, connected, send }: Props) {
           onClick={() => send({ type: 'cmd.get_version' })}
         >
           GET VERSION
+        </button>
+        <button
+          className={`${styles.btn} ${styles.btnDanger}`}
+          disabled={!connected}
+          onClick={requestSystemReset}
+        >
+          SYSTEM RESET
         </button>
       </div>
     </div>

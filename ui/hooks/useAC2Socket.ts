@@ -56,6 +56,7 @@ export interface RangeScanInfo {
 export type OutCmd =
   | { type: 'cmd.manual_lock'; lock: boolean }
   | { type: 'cmd.get_version' }
+  | { type: 'cmd.system_reset' }
   | { type: 'cmd.heartbeat' }
   | { type: 'cmd.create_task'; task_type: 0 | 3 | 4; param: number }
   | { type: 'cmd.delete_task'; slot_index: number }

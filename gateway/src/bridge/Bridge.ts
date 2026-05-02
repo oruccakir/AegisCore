@@ -194,6 +194,10 @@ export class Bridge {
         this.serial.write(encodeCommand(CmdId.GetVersion, Buffer.alloc(0), this.txSeq++, this.psk));
         break;
 
+      case 'cmd.system_reset':
+        this.serial.write(encodeCommand(CmdId.SystemReset, Buffer.alloc(0), this.txSeq++, this.psk));
+        break;
+
       case 'cmd.heartbeat':
         this.sendHeartbeat();
         break;

@@ -21,6 +21,10 @@ export const CmdGetVersionSchema = z.object({
   type: z.literal('cmd.get_version'),
 });
 
+export const CmdSystemResetSchema = z.object({
+  type: z.literal('cmd.system_reset'),
+});
+
 export const CmdHeartbeatSchema = z.object({
   type: z.literal('cmd.heartbeat'),
 });
@@ -44,6 +48,7 @@ export const CmdVisionFrameSchema = z.object({
 export const InboundCmdSchema = z.discriminatedUnion('type', [
   CmdManualLockSchema,
   CmdGetVersionSchema,
+  CmdSystemResetSchema,
   CmdHeartbeatSchema,
   CmdCreateTaskSchema,
   CmdDeleteTaskSchema,
