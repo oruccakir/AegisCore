@@ -14,7 +14,6 @@ export const MAX_FRAME   = OVERHEAD + MAX_PAYLOAD; // 146
 export const CmdId = {
   GetVersion:    0x01,
   VersionReport: 0x02,
-  SetState:      0x10,
   ManualLock:    0x11,
   ResetAck:      0x12,
   ReportState:   0x20,

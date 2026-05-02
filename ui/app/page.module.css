@@ -326,49 +326,72 @@
   line-height: 1.4;
 }
 
-/* State buttons */
-.btnGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
+/* State status */
+.stateReadout {
+  border: 1px solid;
+  border-radius: 2px;
+  padding: 12px;
+  background: var(--bg);
 }
 
-.stateBtn {
-  position: relative;
-  background: transparent;
-  border: 1px solid var(--border-bright);
-  color: var(--text-dim);
-  font-family: var(--display);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  padding: 10px 16px;
-  text-align: left;
-  border-radius: 2px;
-  transition: all 0.15s;
+.stateReadoutCurrent {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.stateBtn:not(:disabled):hover {
-  border-color: var(--green-dim);
-  color: var(--green);
-  background: var(--green-faint);
-}
-.stateBtn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-.stateBtnActive {
-  background: rgba(0,255,65,0.05);
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
 }
 
-.activeDot {
+.stateReadoutDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse-glow 2s infinite;
+  flex-shrink: 0;
+}
+
+.stateReadoutText {
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.stateFlow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.stateFlowStep {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 7px 6px;
+  color: var(--text-faint);
+  font-family: var(--display);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.stateFlowStep[data-active="true"] {
+  border-color: var(--border-bright);
+  color: var(--text);
+  background: var(--green-faint);
+}
+
+.stateFlowDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  animation: pulse-glow 2s infinite;
+  background: var(--border-bright);
   flex-shrink: 0;
 }
 

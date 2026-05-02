@@ -20,11 +20,7 @@ bool RateLimiter::Allow(std::uint8_t cmd_id, std::uint32_t now_ms) noexcept
 {
     Bucket* bucket = nullptr;
 
-    if (cmd_id == CmdId::kSetState)
-    {
-        bucket = &set_state_;
-    }
-    else if (cmd_id == CmdId::kManualLock)
+    if (cmd_id == CmdId::kManualLock)
     {
         bucket = &manual_lock_;
     }

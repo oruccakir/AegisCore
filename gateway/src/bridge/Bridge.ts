@@ -9,9 +9,6 @@ import type { InboundCmd }   from '../ws/schemas.js';
 const STATE_NAME: Record<number, string> = {
   0: 'idle', 1: 'search', 2: 'track', 3: 'fail_safe',
 };
-const STATE_NUM: Record<string, number> = {
-  idle: 0, search: 1, track: 2, fail_safe: 3,
-};
 
 const HB_INTERVAL_MS = 1_000;
 const PSK_HEX = Config.pskHex;
@@ -187,12 +184,6 @@ export class Bridge {
     log('debug', 'ws command', cmd);
 
     switch (cmd.type) {
-      case 'cmd.set_state': {
-        const payload = Buffer.alloc(1);
-        payload[0] = STATE_NUM[cmd.targetState] ?? 0;
-        this.serial.write(encodeCommand(CmdId.SetState, payload, this.txSeq++, this.psk));
-        break;
-      }
       case 'cmd.manual_lock': {
         const payload = Buffer.alloc(1);
         payload[0] = cmd.lock ? 1 : 0;

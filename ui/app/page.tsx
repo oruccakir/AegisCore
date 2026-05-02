@@ -4,7 +4,7 @@ import EventLog from '@/components/dashboard/EventLog';
 import Footer from '@/components/dashboard/Footer';
 import NlpCommandPanel from '@/components/dashboard/NlpCommandPanel';
 import RadarDisplay from '@/components/dashboard/RadarDisplay';
-import StateControlPanel from '@/components/dashboard/StateControlPanel';
+import StateStatusPanel from '@/components/dashboard/StateStatusPanel';
 import StateDescriptionPanel from '@/components/dashboard/StateDescriptionPanel';
 import TaskMonitor from '@/components/dashboard/TaskMonitor';
 import TelemetryPanel from '@/components/dashboard/TelemetryPanel';
@@ -18,7 +18,6 @@ export default function Dashboard() {
 
   const state = telemetry?.state ?? 0;
   const isFailSafe = state === 3;
-  const isSafe = !isFailSafe && status === 'connected';
   const rangeScanActive = tasks.some((task) => task.name.startsWith('RngS'));
 
   return (
@@ -52,7 +51,7 @@ export default function Dashboard() {
             send={send}
           />
 
-          <StateControlPanel state={state} isSafe={isSafe} send={send} />
+          <StateStatusPanel state={state} connected={status === 'connected'} send={send} />
 
           <TaskMonitor tasks={tasks} send={send} />
           <AlertBanners isFailSafe={isFailSafe} status={status} />

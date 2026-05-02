@@ -54,7 +54,6 @@ export interface RangeScanInfo {
 }
 
 export type OutCmd =
-  | { type: 'cmd.set_state'; targetState: 'idle' | 'search' | 'track' | 'fail_safe' }
   | { type: 'cmd.manual_lock'; lock: boolean }
   | { type: 'cmd.get_version' }
   | { type: 'cmd.heartbeat' }

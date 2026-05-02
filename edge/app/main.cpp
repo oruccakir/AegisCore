@@ -417,8 +417,7 @@ static void OnAC2Frame(const AC2Frame& frame, void* /*ctx*/) noexcept
     }
 
     // SR-05: Rate limiting.
-    if ((frame.cmd == CmdId::kSetState || frame.cmd == CmdId::kManualLock) &&
-        !gRateLimiter.Allow(frame.cmd, now_ms))
+    if (frame.cmd == CmdId::kManualLock && !gRateLimiter.Allow(frame.cmd, now_ms))
     {
         SendNack(frame.seq, ErrCode::kRateLimited);
         return;
@@ -446,33 +445,6 @@ static void DispatchRemoteCmd(StateMachine& sm,
 
     switch (rcmd.cmd)
     {
-    case CmdId::kSetState:
-        if (rcmd.payload_len < 1U)
-        {
-            SendNack(rcmd.seq, ErrCode::kInvalidPayload);
-            break;
-        }
-        {
-            const auto target = static_cast<SystemState>(rcmd.payload[0U]);
-            if (target == SystemState::FailSafe)
-            {
-                sm.ForceFailSafe(now_ms);
-                FailSafeSupervisor::Instance().ReportEvent(
-                    FailSafeEvent::ExternalTrigger);
-            }
-            else if (!FailSafeSupervisor::Instance().IsTriggered())
-            {
-                sm.ForceState(target, now_ms);
-            }
-            else
-            {
-                SendNack(rcmd.seq, ErrCode::kFailSafeLock);
-                break;
-            }
-            SendAck(rcmd.seq);
-        }
-        break;
-
     case CmdId::kManualLock:
         gManualLockLedOffMs = MillisecondsSinceBoot() + 1000U;
         sm.ForceFailSafe(now_ms);

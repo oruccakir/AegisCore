@@ -26,12 +26,12 @@ describe('AC2Parser', () => {
   });
 
   it('decodes a command frame with real HMAC', () => {
-    const payload = Buffer.from([0x02]); // target state = track
-    const frame   = encodeCommand(CmdId.SetState, payload, 7, PSK);
+    const payload = Buffer.from([0x01]); // lock = true
+    const frame   = encodeCommand(CmdId.ManualLock, payload, 7, PSK);
     const parser  = new AC2Parser();
     const frames  = feedFrame(parser, frame);
     expect(frames[0]!.crcOk).toBe(true);
-    expect(frames[0]!.cmd).toBe(CmdId.SetState);
+    expect(frames[0]!.cmd).toBe(CmdId.ManualLock);
     expect(frames[0]!.seq).toBe(7);
   });
 
@@ -81,7 +81,7 @@ describe('AC2Parser', () => {
 describe('AC2Framer', () => {
   it('encodeCommand produces a frame with correct length', () => {
     const payload = Buffer.from([0x01]);
-    const frame   = encodeCommand(CmdId.SetState, payload, 0, PSK);
+    const frame   = encodeCommand(CmdId.ManualLock, payload, 0, PSK);
     expect(frame.length).toBe(18 + 1); // OVERHEAD + 1
   });
 
@@ -101,8 +101,8 @@ describe('AC2Framer', () => {
     expect(hmacSlice.every((b) => b === 0)).toBe(true);
   });
 
-  it('throws RangeError for payload > 48 bytes', () => {
-    expect(() => encodeCommand(CmdId.SetState, Buffer.alloc(49), 0, PSK))
+  it('throws RangeError for payload > 128 bytes', () => {
+    expect(() => encodeCommand(CmdId.ManualLock, Buffer.alloc(129), 0, PSK))
       .toThrow(RangeError);
   });
 });

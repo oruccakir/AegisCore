@@ -8,8 +8,7 @@
 namespace aegis::edge {
 
 // Token-bucket rate limiter for incoming commands (SR-05).
-// Capacities per IRS: CMD_SET_STATE 5 req/s burst 10;
-//                     CMD_MANUAL_LOCK 2 req/s burst 3.
+// Capacity: CMD_MANUAL_LOCK 2 req/s burst 3.
 class RateLimiter
 {
 public:
@@ -28,8 +27,6 @@ private:
 
     static void Refill(Bucket& b, std::uint32_t now_ms) noexcept;
 
-    // Bucket for CMD_SET_STATE (0x10): 5 req/s, burst 10.
-    Bucket set_state_  = {0U, 10000U, 5000U, 10000U};
     // Bucket for CMD_MANUAL_LOCK (0x11): 2 req/s, burst 3.
     Bucket manual_lock_= {0U, 3000U,  2000U,  3000U};
 };

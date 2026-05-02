@@ -11,7 +11,6 @@ namespace aegis::edge {
 namespace CmdId {
     inline constexpr std::uint8_t kGetVersion    = 0x01U;
     inline constexpr std::uint8_t kVersionReport  = 0x02U;
-    inline constexpr std::uint8_t kSetState       = 0x10U;
     inline constexpr std::uint8_t kManualLock     = 0x11U;
     inline constexpr std::uint8_t kResetAck       = 0x12U;
     inline constexpr std::uint8_t kReportState    = 0x20U;

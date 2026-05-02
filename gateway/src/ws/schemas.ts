@@ -12,11 +12,6 @@ export type WsEnvelope = z.infer<typeof WsEnvelopeSchema>;
 
 // ---- Host → Gateway commands ------------------------------------------------
 
-export const CmdSetStateSchema = z.object({
-  type:       z.literal('cmd.set_state'),
-  targetState: z.enum(['idle', 'search', 'track', 'fail_safe']),
-});
-
 export const CmdManualLockSchema = z.object({
   type: z.literal('cmd.manual_lock'),
   lock: z.boolean(),
@@ -47,7 +42,6 @@ export const CmdVisionFrameSchema = z.object({
 });
 
 export const InboundCmdSchema = z.discriminatedUnion('type', [
-  CmdSetStateSchema,
   CmdManualLockSchema,
   CmdGetVersionSchema,
   CmdHeartbeatSchema,
