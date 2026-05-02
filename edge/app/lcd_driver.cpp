@@ -50,7 +50,9 @@ void WriteByte(std::uint8_t value, bool data) noexcept
     SetPin(kRsPin, data);
     WriteNibble(static_cast<std::uint8_t>((value >> 4U) & 0x0FU));
     WriteNibble(static_cast<std::uint8_t>(value & 0x0FU));
-    ShortDelay();
+    // HD44780 instructions usually need ~37 us, but clone LCD modules vary.
+    // Use a conservative task-context delay; LCD updates are intentionally slow.
+    aegis::edge::DelayMs(1U);
 }
 
 void Command(std::uint8_t value) noexcept

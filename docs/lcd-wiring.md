@@ -108,3 +108,49 @@ param = refresh period in 250 ms units
 ```
 
 Default UI value `4` means a 1 second refresh period.
+
+## LCD Status Pages
+
+The `LCD STATUS` task starts with:
+
+```text
+AEGIS CORE
+LCD ONLINE
+```
+
+Then it rotates through four pages. Each page is shown for three refresh ticks.
+With the default `param = 4`, one refresh tick is 1 second, so each page stays
+on screen for about 3 seconds.
+
+Page 1: system state and health
+
+```text
+AC2 <STATE>  MM:SS
+CPU xx.x HBn Tnn
+```
+
+Page 2: task count and minimum stack watermark
+
+```text
+TASKS nn  STACK
+MIN nnnn WORDS
+```
+
+Page 3: range scan status
+
+```text
+RANGE Axxx SCAN
+Dxxx THxxx OPEN
+```
+
+If the scan is locked, `SCAN`/`OPEN` is replaced with `LOCK`.
+
+Page 4: vision result
+
+```text
+VISION PERSON
+CONF nnn% TRACK
+```
+
+If no range or vision sample has been received yet, the corresponding page
+shows `NO SAMPLE`.
