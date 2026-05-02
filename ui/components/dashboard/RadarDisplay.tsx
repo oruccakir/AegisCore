@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import type { RangeScanInfo } from '@/hooks/useAC2Socket';
-import styles from './RadarDisplay.module.css';
+import styles from '@/app/page.module.css';
 
 interface Props {
   state: number;
@@ -175,9 +175,9 @@ export default function RadarDisplay({ state, rangeScan = null, rangeScanActive 
   }, [state, rangeScanActive]);
 
   return (
-    <div className={styles.wrap}>
-      <canvas ref={canvasRef} className={styles.canvas} />
-      <div className={styles.ring} />
+    <div className={styles.radarDisplay}>
+      <canvas ref={canvasRef} className={styles.radarCanvas} />
+      <div className={styles.radarRing} />
     </div>
   );
 }

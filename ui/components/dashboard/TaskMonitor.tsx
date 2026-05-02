@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { TaskInfo, OutCmd } from '@/hooks/useAC2Socket';
-import styles from './TaskMonitor.module.css';
+import styles from '@/app/page.module.css';
 
 interface Props {
   tasks: TaskInfo[];
@@ -54,13 +54,13 @@ export default function TaskMonitor({ tasks, send }: Props) {
   }
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.title}>TASK MONITOR</div>
+    <div className={styles.taskMonitorPanel}>
+      <div className={styles.taskMonitorTitle}>TASK MONITOR</div>
 
       {tasks.length === 0 ? (
-        <div className={styles.empty}>Waiting for task list from STM32…</div>
+        <div className={styles.taskMonitorEmpty}>Waiting for task list from STM32…</div>
       ) : (
-        <div className={styles.rows}>
+        <div className={styles.taskMonitorRows}>
           {tasks.map((t) => {
             const isUser  = (t.task_id & 0x80) !== 0;
             const slotIdx = t.task_id & 0x7f;
@@ -69,24 +69,24 @@ export default function TaskMonitor({ tasks, send }: Props) {
             const barColor = warn ? 'var(--red)' : isUser ? 'var(--amber)' : 'var(--green)';
 
             return (
-              <div key={`${t.name}-${t.task_id}`} className={styles.row}>
-                <div className={styles.header}>
-                  <span className={styles.name} style={{ color: isUser ? 'var(--amber)' : 'var(--text)' }}>
+              <div key={`${t.name}-${t.task_id}`} className={styles.taskMonitorRow}>
+                <div className={styles.taskMonitorHeader}>
+                  <span className={styles.taskMonitorName} style={{ color: isUser ? 'var(--amber)' : 'var(--text)' }}>
                     {t.name}
                   </span>
-                  <span className={styles.prio} style={{ color: barColor }}>P{t.priority}</span>
-                  <span className={styles.stateTag}>{TASK_STATE[t.state] ?? t.state}</span>
-                  <span className={styles.cpu}>{pct}%</span>
-                  <span className={styles.free} style={{ color: warn ? 'var(--red)' : 'var(--text-dim)' }}>
+                  <span className={styles.taskMonitorPrio} style={{ color: barColor }}>P{t.priority}</span>
+                  <span className={styles.taskMonitorStateTag}>{TASK_STATE[t.state] ?? t.state}</span>
+                  <span className={styles.taskMonitorCpu}>{pct}%</span>
+                  <span className={styles.taskMonitorFree} style={{ color: warn ? 'var(--red)' : 'var(--text-dim)' }}>
                     {t.stack_watermark}w
                   </span>
                   {isUser && (
-                    <button className={styles.delBtn} onClick={() => deleteTask(slotIdx)}
+                    <button className={styles.taskMonitorDelBtn} onClick={() => deleteTask(slotIdx)}
                       title="Delete task">✕</button>
                   )}
                 </div>
-                <div className={styles.track}>
-                  <div className={styles.fill} style={{ width: `${pct}%`, background: barColor }} />
+                <div className={styles.taskMonitorTrack}>
+                  <div className={styles.taskMonitorFill} style={{ width: `${pct}%`, background: barColor }} />
                 </div>
               </div>
             );
@@ -94,30 +94,30 @@ export default function TaskMonitor({ tasks, send }: Props) {
         </div>
       )}
 
-      <div className={styles.divider} />
+      <div className={styles.taskMonitorDivider} />
 
-      <div className={styles.createSection}>
-        <div className={styles.createRow}>
+      <div className={styles.taskMonitorCreateSection}>
+        <div className={styles.taskMonitorCreateRow}>
           <select
-            className={styles.select}
+            className={styles.taskMonitorSelect}
             value={newType}
             onChange={(e) => selectTaskType(Number(e.target.value) as TaskType)}>
             {(Object.keys(TASK_TYPE_LABELS) as Array<`${TaskType}`>).map((key) => (
               <option key={key} value={key}>{TASK_TYPE_LABELS[Number(key) as TaskType]}</option>
             ))}
           </select>
-          <div className={styles.paramWrap}>
+          <div className={styles.taskMonitorParamWrap}>
             <input
-              className={styles.paramInput}
+              className={styles.taskMonitorParamInput}
               type="number" min={0} max={255}
               value={newParam}
               onChange={(e) => setNewParam(Math.max(0, Math.min(255, Number(e.target.value))))} />
           </div>
-          <button className={styles.addBtn} onClick={createTask}>+ ADD</button>
+          <button className={styles.taskMonitorAddBtn} onClick={createTask}>+ ADD</button>
         </div>
-        <div className={styles.paramHint}>
-          <span className={styles.paramLabel}>{meta.label}</span>
-          <span className={styles.paramCalc}>{meta.hint(newParam)}</span>
+        <div className={styles.taskMonitorParamHint}>
+          <span className={styles.taskMonitorParamLabel}>{meta.label}</span>
+          <span className={styles.taskMonitorParamCalc}>{meta.hint(newParam)}</span>
         </div>
       </div>
     </div>

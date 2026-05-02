@@ -457,3 +457,282 @@
   letter-spacing: 0.1em;
   flex-shrink: 0;
 }
+
+/* Radar display */
+.radarDisplay {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  flex-shrink: 0;
+}
+
+.radarCanvas {
+  display: block;
+  border-radius: 50%;
+  image-rendering: pixelated;
+}
+
+.radarRing {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid var(--border-bright);
+  box-shadow:
+    0 0 12px rgba(0, 255, 65, 0.08),
+    inset 0 0 12px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+/* Task monitor */
+.taskMonitorPanel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+
+.taskMonitorTitle {
+  font-family: var(--display);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.taskMonitorEmpty {
+  font-size: 10px;
+  color: var(--text-faint);
+  padding: 6px 0;
+}
+
+.taskMonitorRows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.taskMonitorRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.taskMonitorHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.taskMonitorName {
+  min-width: 64px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.taskMonitorPrio {
+  font-size: 9px;
+  font-family: var(--display);
+  letter-spacing: 0.05em;
+  min-width: 18px;
+}
+
+.taskMonitorStateTag {
+  font-size: 8px;
+  font-family: var(--display);
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  min-width: 44px;
+}
+
+.taskMonitorCpu {
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--text-dim);
+  min-width: 28px;
+  text-align: right;
+}
+
+.taskMonitorFree {
+  margin-left: auto;
+  font-size: 9px;
+  font-family: var(--mono);
+}
+
+.taskMonitorDelBtn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--red);
+  font-size: 8px;
+  padding: 0 4px;
+  cursor: pointer;
+  line-height: 14px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.taskMonitorDelBtn:hover {
+  opacity: 1;
+}
+
+.taskMonitorTrack {
+  height: 3px;
+  background: var(--bg-card);
+  border-radius: 2px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.taskMonitorFill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.taskMonitorDivider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0 8px;
+}
+
+.taskMonitorCreateSection {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.taskMonitorCreateRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.taskMonitorParamWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.taskMonitorParamHint {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding-left: 2px;
+}
+
+.taskMonitorParamLabel {
+  font-size: 8px;
+  font-family: var(--display);
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.taskMonitorParamCalc {
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.taskMonitorSelect {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.taskMonitorParamInput {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 6px;
+  width: 48px;
+  text-align: center;
+}
+
+.taskMonitorAddBtn {
+  background: none;
+  border: 1px solid var(--green);
+  border-radius: 3px;
+  color: var(--green);
+  font-family: var(--display);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.taskMonitorAddBtn:hover {
+  background: var(--green);
+  color: var(--bg);
+}
+
+/* Event log */
+.eventLog {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.eventLogHeader {
+  font-family: var(--display);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+  padding: 0 0 8px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.eventLogList {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.eventLogEmpty {
+  color: var(--text-faint);
+  font-size: 11px;
+  padding: 8px 0;
+  text-align: center;
+}
+
+.eventLogEntry {
+  display: grid;
+  grid-template-columns: 90px 52px 1fr;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  animation: fade-in-down 0.15s ease both;
+}
+
+.eventLogTime {
+  color: var(--text-faint);
+  font-size: 10px;
+  padding-top: 1px;
+}
+
+.eventLogType {
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.eventLogText {
+  color: var(--text);
+  word-break: break-all;
+}
