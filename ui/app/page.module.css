@@ -108,6 +108,101 @@
 }
 .stateDescText { color: var(--text-dim); font-size: 11px; line-height: 1.6; }
 
+.nlpPanel {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.nlpGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.nlpField {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.nlpField span {
+  color: var(--text-faint);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+}
+
+.nlpSelect,
+.nlpInput,
+.nlpText {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border-bright);
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  outline: none;
+}
+
+.nlpSelect,
+.nlpInput {
+  height: 32px;
+  padding: 0 9px;
+}
+
+.nlpText {
+  display: block;
+  min-height: 86px;
+  margin-top: 8px;
+  padding: 9px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.nlpSelect:focus,
+.nlpInput:focus,
+.nlpText:focus {
+  border-color: var(--green-dim);
+  box-shadow: 0 0 10px rgba(0,255,65,0.12);
+}
+
+.nlpInput {
+  margin-top: 8px;
+}
+
+.nlpInput::placeholder,
+.nlpText::placeholder {
+  color: var(--text-faint);
+}
+
+.nlpStatusRow {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  margin: 8px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.nlpStatus {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  overflow-wrap: anywhere;
+}
+
+.nlpStatus[data-action="get_version"],
+.nlpStatus[data-action="manual_lock"] {
+  color: var(--green);
+}
+
+.nlpStatus[data-action="unsupported"] {
+  color: var(--amber);
+}
+
 /* ── CENTER ── */
 .center {
   display: flex;

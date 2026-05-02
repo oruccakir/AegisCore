@@ -14,6 +14,24 @@ const STATE_DESC   = [
   'Target acquired. Tracking in progress.',
   'FAIL-SAFE ENGAGED. System locked.',
 ];
+const INFERENCE_BASE_URL = process.env.NEXT_PUBLIC_INFERENCE_URL ?? 'http://127.0.0.1:7979';
+const DEFAULT_NLP_MODEL: Record<NlpProvider, string> = {
+  gemini: 'gemini-3-flash-preview',
+  ollama: 'llama3.2:latest',
+};
+const DEFAULT_OLLAMA_URL = 'http://127.0.0.1:11434';
+
+type NlpProvider = 'gemini' | 'ollama';
+
+interface NlpCommandResponse {
+  provider: NlpProvider;
+  model: string;
+  action: 'get_version' | 'manual_lock' | 'unsupported';
+  safe_to_send: boolean;
+  gateway_command: OutCmd | null;
+  confidence: number;
+  reason: string;
+}
 
 function fmtUptime(ms: number) {
   const s = Math.floor(ms / 1000);
@@ -82,6 +100,11 @@ export default function Dashboard() {
           <div className={styles.radarWrap}>
             <RadarDisplay state={state} />
           </div>
+
+          <NlpCommandPanel
+            connected={status === 'connected'}
+            send={send}
+          />
 
           <div className={styles.stateDesc} style={{ borderColor: `${stateColor}44` }}>
             <div className={styles.stateDescTitle} style={{ color: stateColor }}>
@@ -177,6 +200,165 @@ export default function Dashboard() {
           seq {log[0]?.id ?? 0}
         </span>
       </footer>
+    </div>
+  );
+}
+
+function NlpCommandPanel({ connected, send }: {
+  connected: boolean;
+  send: (cmd: OutCmd) => void;
+}) {
+  const [provider, setProvider] = useState<NlpProvider>('ollama');
+  const [models, setModels] = useState<string[]>([DEFAULT_NLP_MODEL.ollama]);
+  const [model, setModel] = useState(DEFAULT_NLP_MODEL.ollama);
+  const [apiKey, setApiKey] = useState('');
+  const [ollamaUrl, setOllamaUrl] = useState(DEFAULT_OLLAMA_URL);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [statusText, setStatusText] = useState('READY');
+  const [lastAction, setLastAction] = useState<NlpCommandResponse['action'] | null>(null);
+
+  useEffect(() => {
+    const fallback = DEFAULT_NLP_MODEL[provider];
+    setModels([fallback]);
+    setModel(fallback);
+    setStatusText('READY');
+  }, [provider]);
+
+  async function loadModels() {
+    setLoadingModels(true);
+    setStatusText('LOADING MODELS');
+    try {
+      const response = await postJson<{ models: string[] }>('/nlp/models', {
+        provider,
+        api_key: provider === 'gemini' && apiKey ? apiKey : undefined,
+        ollama_url: provider === 'ollama' ? ollamaUrl : undefined,
+      });
+      const nextModels = response.models.length > 0 ? response.models : [DEFAULT_NLP_MODEL[provider]];
+      setModels(nextModels);
+      setModel(nextModels[0]);
+      setStatusText(`${nextModels.length} MODEL${nextModels.length === 1 ? '' : 'S'}`);
+    } catch (err) {
+      setStatusText(err instanceof Error ? err.message.toUpperCase().slice(0, 48) : 'MODEL LOAD FAILED');
+      setModels([DEFAULT_NLP_MODEL[provider]]);
+      setModel(DEFAULT_NLP_MODEL[provider]);
+    } finally {
+      setLoadingModels(false);
+    }
+  }
+
+  async function submitCommand() {
+    const trimmed = text.trim();
+    if (!trimmed || !model || busy) return;
+
+    setBusy(true);
+    setLastAction(null);
+    setStatusText('CLASSIFYING');
+    try {
+      const result = await postJson<NlpCommandResponse>('/nlp/command', {
+        text: trimmed,
+        provider,
+        model,
+        api_key: provider === 'gemini' && apiKey ? apiKey : undefined,
+        ollama_url: provider === 'ollama' ? ollamaUrl : undefined,
+      });
+      setLastAction(result.action);
+
+      if (!result.safe_to_send || !result.gateway_command) {
+        setStatusText(`BLOCKED ${Math.round(result.confidence * 100)}%`);
+        return;
+      }
+
+      if (!connected) {
+        setStatusText('GATEWAY OFFLINE');
+        return;
+      }
+
+      send(result.gateway_command);
+      setStatusText(`SENT ${result.action.toUpperCase()} ${Math.round(result.confidence * 100)}%`);
+      setText('');
+    } catch (err) {
+      setStatusText(err instanceof Error ? err.message.toUpperCase().slice(0, 48) : 'NLP FAILED');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={`${styles.panel} ${styles.nlpPanel}`}>
+      <div className={styles.panelTitle}>AI COMMAND</div>
+
+      <div className={styles.nlpGrid}>
+        <label className={styles.nlpField}>
+          <span>PROVIDER</span>
+          <select
+            className={styles.nlpSelect}
+            value={provider}
+            onChange={(evt) => setProvider(evt.target.value as NlpProvider)}>
+            <option value="ollama">OLLAMA</option>
+            <option value="gemini">GEMINI</option>
+          </select>
+        </label>
+
+        <label className={styles.nlpField}>
+          <span>MODEL</span>
+          <select
+            className={styles.nlpSelect}
+            value={model}
+            onChange={(evt) => setModel(evt.target.value)}>
+            {models.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {provider === 'gemini' ? (
+        <input
+          className={styles.nlpInput}
+          type="password"
+          value={apiKey}
+          onChange={(evt) => setApiKey(evt.target.value)}
+          placeholder="GEMINI API KEY"
+          autoComplete="off"
+        />
+      ) : (
+        <input
+          className={styles.nlpInput}
+          value={ollamaUrl}
+          onChange={(evt) => setOllamaUrl(evt.target.value)}
+          placeholder="OLLAMA URL"
+          autoComplete="off"
+        />
+      )}
+
+      <textarea
+        className={styles.nlpText}
+        value={text}
+        onChange={(evt) => setText(evt.target.value)}
+        placeholder="GET VERSION / MANUAL LOCK"
+        rows={4}
+      />
+
+      <div className={styles.nlpStatusRow}>
+        <span className={styles.nlpStatus} data-action={lastAction ?? 'none'}>{statusText}</span>
+      </div>
+
+      <div className={styles.btnRow}>
+        <button
+          className={`${styles.btn} ${styles.btnSecondary}`}
+          disabled={loadingModels}
+          onClick={loadModels}>
+          MODELS
+        </button>
+        <button
+          className={`${styles.btn} ${styles.btnSecondary}`}
+          disabled={!text.trim() || busy}
+          onClick={submitCommand}>
+          SEND
+        </button>
+      </div>
     </div>
   );
 }
@@ -310,4 +492,25 @@ function StateBtn({ label, active, disabled, color, onClick }:
       {label}
     </button>
   );
+}
+
+async function postJson<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(`${INFERENCE_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`;
+    try {
+      const errorBody = await response.json() as { detail?: unknown };
+      if (typeof errorBody.detail === 'string') detail = errorBody.detail;
+    } catch {
+      // Keep the HTTP fallback.
+    }
+    throw new Error(detail);
+  }
+
+  return response.json() as Promise<T>;
 }
