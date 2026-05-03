@@ -60,20 +60,29 @@ set(FREERTOS_SOURCES
 # First-party application sources.
 # ---------------------------------------------------------------------------
 set(APP_SOURCES
-    app/ac2_framer.cpp
-    app/button_classifier.cpp
-    app/crc16.cpp
-    app/fail_safe_supervisor.cpp
-    app/freertos_hooks.cpp
-    app/hmac_sha256.cpp
-    app/lcd_driver.cpp
+    app/comms/ac2_framer.cpp
+    app/comms/command_dispatch.cpp
+    app/comms/crc16.cpp
+    app/comms/heartbeat_task.cpp
+    app/comms/hmac_sha256.cpp
+    app/comms/rate_limiter.cpp
+    app/comms/replay_guard.cpp
+    app/comms/telemetry_task.cpp
+    app/comms/uart_rx_task.cpp
+    app/control/button_classifier.cpp
+    app/control/simulation_engine.cpp
+    app/control/state_machine.cpp
+    app/drivers/lcd_driver.cpp
+    app/drivers/platform_io.cpp
     app/main.cpp
-    app/platform_io.cpp
-    app/post.cpp
-    app/rate_limiter.cpp
-    app/replay_guard.cpp
-    app/simulation_engine.cpp
-    app/state_machine.cpp
+    app/runtime/edge_runtime.cpp
+    app/safety/fail_safe_supervisor.cpp
+    app/safety/freertos_hooks.cpp
+    app/safety/post.cpp
+    app/tasks/joystick_task.cpp
+    app/tasks/lcd_status_task.cpp
+    app/tasks/state_machine_task.cpp
+    app/tasks/user_tasks.cpp
 )
 
 set(BSP_SOURCES
@@ -101,6 +110,12 @@ add_executable(${ELF_TARGET}
 
 target_include_directories(${ELF_TARGET} PRIVATE
     app
+    app/comms
+    app/control
+    app/drivers
+    app/runtime
+    app/safety
+    app/tasks
     bsp                 # stm32f4xx_hal_conf.h lives here
     ${CMSIS_DEVICE_DIR}/Include
     ${CMSIS_CORE_DIR}
@@ -154,20 +169,29 @@ target_compile_options(${ELF_TARGET} PRIVATE $<$<CONFIG:Release>:-Os -g>)
 
 # Treat only our own sources as warnings-as-errors — vendor HAL may warn.
 set_source_files_properties(
-    app/ac2_framer.cpp
-    app/button_classifier.cpp
-    app/crc16.cpp
-    app/fail_safe_supervisor.cpp
-    app/freertos_hooks.cpp
-    app/hmac_sha256.cpp
-    app/lcd_driver.cpp
+    app/comms/ac2_framer.cpp
+    app/comms/command_dispatch.cpp
+    app/comms/crc16.cpp
+    app/comms/heartbeat_task.cpp
+    app/comms/hmac_sha256.cpp
+    app/comms/rate_limiter.cpp
+    app/comms/replay_guard.cpp
+    app/comms/telemetry_task.cpp
+    app/comms/uart_rx_task.cpp
+    app/control/button_classifier.cpp
+    app/control/simulation_engine.cpp
+    app/control/state_machine.cpp
+    app/drivers/lcd_driver.cpp
+    app/drivers/platform_io.cpp
     app/main.cpp
-    app/platform_io.cpp
-    app/post.cpp
-    app/rate_limiter.cpp
-    app/replay_guard.cpp
-    app/simulation_engine.cpp
-    app/state_machine.cpp
+    app/runtime/edge_runtime.cpp
+    app/safety/fail_safe_supervisor.cpp
+    app/safety/freertos_hooks.cpp
+    app/safety/post.cpp
+    app/tasks/joystick_task.cpp
+    app/tasks/lcd_status_task.cpp
+    app/tasks/state_machine_task.cpp
+    app/tasks/user_tasks.cpp
     bsp/mpu_config.cpp
     bsp/panic.cpp
     bsp/stm32f4xx_it.c
