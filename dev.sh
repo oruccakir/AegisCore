@@ -4,7 +4,7 @@ set -euo pipefail
 RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'
 CYAN=$'\033[0;36m'; BOLD=$'\033[1m'; RESET=$'\033[0m'
 
-SERIAL_PORT="${SERIAL_PORT:-/dev/ttyACM0}"
+SERIAL_PORT="${SERIAL_PORT:-}"
 LOG_LEVEL="${LOG_LEVEL:-debug}"
 SKIP_FLASH="${SKIP_FLASH:-0}"
 INFERENCE_HOST="${INFERENCE_HOST:-127.0.0.1}"
@@ -18,6 +18,28 @@ log()  { echo -e "${BOLD}[dev.sh]${RESET} $*"; }
 ok()   { echo -e "${GREEN}[dev.sh] ✓ $*${RESET}"; }
 fail() { echo -e "${RED}[dev.sh] ✗ $*${RESET}"; exit 1; }
 warn() { echo -e "${YELLOW}[dev.sh] ! $*${RESET}"; }
+
+detect_serial_port() {
+    if [[ -n "$SERIAL_PORT" ]]; then
+        echo "$SERIAL_PORT"
+        return
+    fi
+
+    local candidate
+    for candidate in /dev/serial/by-id/*Arduino*; do
+        [[ -e "$candidate" ]] && echo "$candidate" && return
+    done
+
+    for candidate in /dev/serial/by-id/*; do
+        [[ -e "$candidate" ]] && echo "$candidate" && return
+    done
+
+    for candidate in /dev/ttyACM* /dev/ttyUSB*; do
+        [[ -e "$candidate" ]] && echo "$candidate" && return
+    done
+
+    echo "/dev/ttyACM0"
+}
 
 cleanup() {
     echo ""
@@ -57,6 +79,7 @@ else
 fi
 
 # ── 3. Check serial port ──────────────────────────────────────────────────
+SERIAL_PORT="$(detect_serial_port)"
 if [[ ! -e "$SERIAL_PORT" ]]; then
     fail "Serial port $SERIAL_PORT not found. Set SERIAL_PORT= or check Arduino bridge."
 fi
